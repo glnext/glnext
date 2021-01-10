@@ -776,6 +776,81 @@ PyObject * glnext_meth_pack(PyObject * self, PyObject ** args, Py_ssize_t nargs)
     return res;
 }
 
+struct vec3 {
+    double x, y, z;
+};
+
+vec3 operator - (const vec3 & a, const vec3 & b) {
+    return {a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+vec3 normalize(const vec3 & a) {
+    const double l = sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+    return {a.x / l, a.y / l, a.z / l};
+}
+
+vec3 cross(const vec3 & a, const vec3 & b) {
+    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+}
+
+double dot(const vec3 & a, const vec3 & b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+PyObject * glnext_meth_camera(PyObject * self, PyObject * args, PyObject * kwargs) {
+    static char * keywords[] = {"eye", "target", "up", "fov", "aspect", "near", "far", NULL};
+
+    vec3 eye;
+    vec3 target;
+    vec3 up = {0.0, 0.0, 1.0};
+    double fov = 75.0;
+    double aspect = 1.0;
+    double znear = 0.1;
+    double zfar = 1000.0;
+
+    int args_ok = PyArg_ParseTupleAndKeywords(
+        args,
+        kwargs,
+        "(ddd)(ddd)|(ddd)dddd",
+        keywords,
+        &eye.x,
+        &eye.y,
+        &eye.z,
+        &target.x,
+        &target.y,
+        &target.z,
+        &up.x,
+        &up.y,
+        &up.z,
+        &fov,
+        &aspect,
+        &znear,
+        &zfar
+    );
+
+    if (!args_ok) {
+        return NULL;
+    }
+
+    const double r1 = tan(fov * 0.01745329251994329576923690768489 / 2.0);
+    const double r2 = r1 * aspect;
+    const double r3 = (zfar + znear) / (zfar - znear);
+    const double r4 = (2.0 * zfar * znear) / (zfar - znear);
+    const vec3 f = normalize(target - eye);
+    const vec3 s = normalize(cross(f, up));
+    const vec3 u = cross(s, f);
+    const vec3 t = {-dot(s, eye), -dot(u, eye), -dot(f, eye)};
+
+    float res[] = {
+        (float)(s.x / r2), (float)(u.x / r1), (float)(r3 * f.x), (float)f.x,
+        (float)(s.y / r2), (float)(u.y / r1), (float)(r3 * f.y), (float)f.y,
+        (float)(s.z / r2), (float)(u.z / r1), (float)(r3 * f.z), (float)f.z,
+        (float)(t.x / r2), (float)(t.y / r1), (float)(r3 * t.z - r4), (float)t.z,
+    };
+
+    return PyBytes_FromStringAndSize((char *)res, 64);
+}
+
 void default_dealloc(PyObject * self) {
     Py_TYPE(self)->tp_free(self);
 }
@@ -855,6 +930,7 @@ PyType_Spec Image_spec = {"glnext.Image", sizeof(Image), 0, Py_TPFLAGS_DEFAULT, 
 PyMethodDef module_methods[] = {
     {"instance", (PyCFunction)glnext_meth_instance, METH_VARARGS | METH_KEYWORDS, NULL},
     {"pack", (PyCFunction)glnext_meth_pack, METH_FASTCALL, NULL},
+    {"camera", (PyCFunction)glnext_meth_camera, METH_VARARGS | METH_KEYWORDS, NULL},
     {},
 };
 
