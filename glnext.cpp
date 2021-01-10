@@ -1,6 +1,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include <vulkan/vulkan_core.h>
+
 struct Context;
 struct Memory;
 struct Renderer;
@@ -9,6 +11,19 @@ struct Image;
 
 struct Instance {
     PyObject_HEAD
+
+    VkInstance instance;
+    VkPhysicalDevice physical_device;
+    VkDevice device;
+    VkQueue queue;
+
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer;
+    VkFence fence;
+
+    uint32_t queue_family_index;
+    uint32_t host_memory_type_index;
+    uint32_t device_memory_type_index;
 
     Memory * device_memory;
     Memory * host_memory;
@@ -29,6 +44,9 @@ struct Context {
     uint32_t height;
     uint32_t samples;
 
+    VkRenderPass render_pass;
+    VkFramebuffer framebuffer;
+
     Image * depth_image;
     Buffer * uniform_buffer;
 
@@ -39,12 +57,18 @@ struct Memory {
     PyObject_HEAD
 
     Instance * instance;
+
+    VkBool32 host;
+    VkDeviceSize size;
+    VkDeviceMemory memory;
+    void * ptr;
 };
 
 struct Renderer {
     PyObject_HEAD
 
     Context * ctx;
+    Memory * memory;
 
     Buffer * vertex_buffer;
     Buffer * instance_buffer;
@@ -55,19 +79,41 @@ struct Renderer {
     uint32_t instance_count;
     uint32_t index_count;
     uint32_t indirect_count;
-    uint32_t enabled;
+    VkBool32 enabled;
+
+    VkDescriptorSetLayout descriptor_set_layout;
+    VkPipelineLayout pipeline_layout;
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSet descriptor_set;
+    VkShaderModule vertex_shader_module;
+    VkShaderModule fragment_shader_module;
+    VkPipeline pipeline;
 };
 
 struct Buffer {
     PyObject_HEAD
 
     Instance * instance;
+    Memory * memory;
+
+    VkBufferUsageFlags usage;
+    VkDeviceSize offset;
+    VkDeviceSize size;
+    VkBuffer buffer;
 };
 
 struct Image {
     PyObject_HEAD
 
     Instance * instance;
+    Memory * memory;
+
+    VkDeviceSize offset;
+    VkDeviceSize size;
+    VkExtent3D extent;
+    VkSampleCountFlagBits samples;
+    VkFormat format;
+    VkImage image;
 };
 
 PyTypeObject * Instance_type;
@@ -76,6 +122,8 @@ PyTypeObject * Memory_type;
 PyTypeObject * Renderer_type;
 PyTypeObject * Buffer_type;
 PyTypeObject * Image_type;
+
+PyObject * empty_str;
 
 Memory * new_memory(Instance * self) {
     Memory * res = PyObject_New(Memory, Memory_type);
@@ -101,8 +149,8 @@ Image * new_image(Instance * self) {
 Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwargs) {
     static char * keywords[] = {"host_memory", "device_memory", NULL};
 
-    uint64_t host_memory_size = 0;
-    uint64_t device_memory_size = 0;
+    VkDeviceSize host_memory_size = 0;
+    VkDeviceSize device_memory_size = 0;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         args,
@@ -204,20 +252,20 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         NULL,
     };
 
-    PyObject * vertex_shader;
-    PyObject * fragment_shader;
-    PyObject * vertex_format;
-    PyObject * instance_format;
-    uint32_t vertex_count;
-    uint32_t instance_count;
-    uint32_t index_count;
-    uint32_t indirect_count;
-    const char * topology_str;
+    PyObject * vertex_shader = Py_None;
+    PyObject * fragment_shader = Py_None;
+    PyObject * vertex_format = empty_str;
+    PyObject * instance_format = empty_str;
+    uint32_t vertex_count = 0;
+    uint32_t instance_count = 1;
+    uint32_t index_count = 0;
+    uint32_t indirect_count = 0;
+    const char * topology_str = "triangles";
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         args,
         kwargs,
-        "$O!O!OOIIIIs",
+        "|$O!O!OOIIIIs",
         keywords,
         &PyBytes_Type,
         &vertex_shader,
@@ -239,16 +287,22 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
     Renderer * res = PyObject_New(Renderer, Renderer_type);
     res->ctx = self;
 
+    res->vertex_buffer = new_buffer(self->instance);
+    res->instance_buffer = new_buffer(self->instance);
+    res->index_buffer = new_buffer(self->instance);
+    res->indirect_buffer = new_buffer(self->instance);
+
     PyList_Append(self->renderer_list, (PyObject *)res);
     return res;
 }
 
 PyObject * Context_meth_update(Context * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {"uniform_buffer", NULL};
+    static char * keywords[] = {"uniform_buffer", "clear_value_buffer", NULL};
 
     PyObject * uniform_buffer = Py_None;
+    PyObject * clear_value_buffer = Py_None;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|$O", keywords, &uniform_buffer)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|$OO", keywords, &uniform_buffer, &clear_value_buffer)) {
         return NULL;
     }
 
@@ -291,7 +345,7 @@ PyObject * Renderer_meth_update(Renderer * self, PyObject * args, PyObject * kwa
     uint32_t instance_count = self->instance_count;
     uint32_t index_count = self->index_count;
     uint32_t indirect_count = self->indirect_count;
-    uint32_t enabled = self->enabled;
+    VkBool32 enabled = self->enabled;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         args,
@@ -363,6 +417,7 @@ PyType_Slot Memory_slots[] = {
 };
 
 PyType_Slot Renderer_slots[] = {
+    {Py_tp_methods, Renderer_methods},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
