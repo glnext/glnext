@@ -7,8 +7,6 @@ ext = Extension(
     include_dirs=[os.path.join(os.getenv('VULKAN_SDK'), 'Include')],
     library_dirs=[os.path.join(os.getenv('VULKAN_SDK'), 'Lib')],
     libraries=['vulkan-1'],
-    extra_compile_args=['/Z7'],
-    extra_link_args=['/DEBUG:FULL'],
 )
 
 setup(
