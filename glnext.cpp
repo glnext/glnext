@@ -10,6 +10,13 @@ struct Renderer;
 struct Buffer;
 struct Image;
 
+enum PackType {
+    PACK_FLOAT,
+    PACK_INT,
+    PACK_BYTE,
+    PACK_PAD,
+};
+
 struct Instance {
     PyObject_HEAD
 
@@ -126,6 +133,13 @@ PyTypeObject * Buffer_type;
 PyTypeObject * Image_type;
 
 PyObject * empty_str;
+PyObject * format_dict;
+
+void register_format(const char * name, VkFormat format, int size, PackType pack_type, int pack_count) {
+    PyObject * item = Py_BuildValue("IIII", format, size, pack_type, pack_count);
+    PyDict_SetItemString(format_dict, name, item);
+    Py_DECREF(item);
+}
 
 VkCommandBuffer begin_commands(Instance * self) {
     VkCommandBufferBeginInfo command_buffer_begin_info = {
@@ -703,6 +717,65 @@ PyObject * Instance_meth_release(Instance * self) {
     Py_RETURN_NONE;
 }
 
+PyObject * glnext_meth_pack(PyObject * self, PyObject ** args, Py_ssize_t nargs) {
+    if (nargs != 1 && nargs != 2) {
+        return NULL;
+    }
+
+    PyObject * seq = PySequence_Fast(args[nargs - 1], "");
+    PyObject ** array = PySequence_Fast_ITEMS(seq);
+
+    int row_size = 0;
+    int format_count = 0;
+    PackType format_array[256];
+
+    if (nargs == 1) {
+        format_array[format_count++] = PyLong_CheckExact(array[0]) ? PACK_INT : PACK_FLOAT;
+        row_size = 4;
+    } else {
+        PyObject * vformat = PyUnicode_Split(args[0], NULL, -1);
+        if (!vformat) {
+            return NULL;
+        }
+        for (int k = 0; k < PyList_Size(vformat); ++k) {
+            PyObject * format = PyDict_GetItem(format_dict, PyList_GetItem(vformat, k));
+            PackType pack_type = (PackType)PyLong_AsUnsignedLong(PyTuple_GetItem(format, 2));
+            int pack_items = PyLong_AsLong(PyTuple_GetItem(format, 3));
+            row_size += PyLong_AsLong(PyTuple_GetItem(format, 1));
+            while (pack_items--) {
+                format_array[format_count++] = pack_type;
+            }
+        }
+        Py_DECREF(vformat);
+    }
+
+    int rows = (int)PySequence_Fast_GET_SIZE(seq) / format_count;
+
+    PyObject * res = PyBytes_FromStringAndSize(NULL, rows * row_size);
+    char * data = PyBytes_AsString(res);
+
+    for (int i = 0; i < rows; ++i) {
+        for (int k = 0; k < format_count; ++k) {
+            switch (format_array[k]) {
+                case PACK_FLOAT:
+                    *(*(float **)&data)++ = (float)PyFloat_AsDouble(*array++);
+                    break;
+                case PACK_INT:
+                    *(*(int **)&data)++ = PyLong_AsLong(*array++);
+                    break;
+                case PACK_BYTE:
+                    *(*(uint8_t **)&data)++ = (uint8_t)PyLong_AsUnsignedLong(*array++);
+                    break;
+                case PACK_PAD:
+                    *data++ = 0;
+                    break;
+            }
+        }
+    }
+
+    return res;
+}
+
 void default_dealloc(PyObject * self) {
     Py_TYPE(self)->tp_free(self);
 }
@@ -781,6 +854,7 @@ PyType_Spec Image_spec = {"glnext.Image", sizeof(Image), 0, Py_TPFLAGS_DEFAULT, 
 
 PyMethodDef module_methods[] = {
     {"instance", (PyCFunction)glnext_meth_instance, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"pack", (PyCFunction)glnext_meth_pack, METH_FASTCALL, NULL},
     {},
 };
 
@@ -797,6 +871,25 @@ extern "C" PyObject * PyInit_glnext() {
     Image_type = (PyTypeObject *)PyType_FromSpec(&Image_spec);
 
     empty_str = PyUnicode_FromString("");
+
+    format_dict = PyDict_New();
+
+    register_format("1f", VK_FORMAT_R32_SFLOAT, 4, PACK_FLOAT, 1);
+    register_format("2f", VK_FORMAT_R32G32_SFLOAT, 8, PACK_FLOAT, 2);
+    register_format("3f", VK_FORMAT_R32G32B32_SFLOAT, 12, PACK_FLOAT, 3);
+    register_format("4f", VK_FORMAT_R32G32B32A32_SFLOAT, 16, PACK_FLOAT, 4);
+    register_format("1i", VK_FORMAT_R32_SINT, 4, PACK_INT, 1);
+    register_format("2i", VK_FORMAT_R32G32_SINT, 8, PACK_INT, 2);
+    register_format("3i", VK_FORMAT_R32G32B32_SINT, 12, PACK_INT, 3);
+    register_format("4i", VK_FORMAT_R32G32B32A32_SINT, 16, PACK_INT, 4);
+    register_format("1b", VK_FORMAT_R8_UNORM, 1, PACK_BYTE, 1);
+    register_format("2b", VK_FORMAT_R8G8_UNORM, 2, PACK_BYTE, 2);
+    register_format("3b", VK_FORMAT_R8G8B8_UNORM, 3, PACK_BYTE, 3);
+    register_format("4b", VK_FORMAT_B8G8R8A8_UNORM, 4, PACK_BYTE, 4);
+    register_format("1x", VK_FORMAT_UNDEFINED, 1, PACK_PAD, 1);
+    register_format("2x", VK_FORMAT_UNDEFINED, 2, PACK_PAD, 2);
+    register_format("3x", VK_FORMAT_UNDEFINED, 3, PACK_PAD, 3);
+    register_format("4x", VK_FORMAT_UNDEFINED, 4, PACK_PAD, 4);
 
     return module;
 }
