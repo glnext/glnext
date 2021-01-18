@@ -1031,8 +1031,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         res->staging_memory = new_memory({res, true});
         res->staging_buffer = new_buffer({
             res,
-            res->host_memory,
-            args.host_memory_size,
+            res->staging_memory,
+            args.staging_buffer_size,
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         });
 
