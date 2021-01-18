@@ -1925,8 +1925,13 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
     }
 
     VkBuffer vertex_buffer_array[64];
-    for (uint32_t i = 0; i < attribute_count; ++i) {
+
+    for (uint32_t i = 0; i < vertex_attribute_count; ++i) {
         vertex_buffer_array[i] = res->vertex_buffer->buffer;
+    }
+
+    for (uint32_t i = vertex_attribute_count; i < attribute_count; ++i) {
+        vertex_buffer_array[i] = res->instance_buffer->buffer;
     }
 
     res->vertex_buffers = preserve_array(attribute_count, vertex_buffer_array);
