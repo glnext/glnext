@@ -4,11 +4,47 @@ from PIL import Image
 
 instance = glnext.instance()
 
-texture = Image.open('examples/rock.jpg').convert('RGBA')
-image = instance.image(texture.size, '4b')
-image.write(texture.tobytes())
+triangle_renderer = instance.renderer((512, 512), mode='texture')
 
-sampler = instance.sampler(image)
+triangle_pipeline = triangle_renderer.pipeline(
+    vertex_shader=glsl('''
+        #version 450
+        #pragma shader_stage(vertex)
+
+        layout (location = 0) out vec4 out_color;
+
+        vec2 positions[3] = vec2[](
+            vec2(-0.9, -0.9),
+            vec2(0.9, -0.9),
+            vec2(0.0, 0.9)
+        );
+
+        vec4 colors[3] = vec4[](
+            vec4(1.0, 0.0, 0.0, 1.0),
+            vec4(0.0, 1.0, 0.0, 1.0),
+            vec4(0.0, 0.0, 1.0, 1.0)
+        );
+
+        void main() {
+            gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+            out_color = colors[gl_VertexIndex];
+        }
+    '''),
+    fragment_shader=glsl('''
+        #version 450
+        #pragma shader_stage(fragment)
+
+        layout (location = 0) in vec4 in_color;
+        layout (location = 0) out vec4 out_color;
+
+        void main() {
+            out_color = in_color;
+        }
+    '''),
+    vertex_count=3,
+)
+
+sampler = instance.sampler(triangle_renderer.output[0])
 
 renderer = instance.renderer((512, 512))
 
@@ -48,8 +84,8 @@ pipeline = renderer.pipeline(
 pipeline.update(
     vertex_buffer=glnext.pack([
         -0.5, -0.5, 0.0, 0.0,
-        0.5, -0.5, 1.0, 0.0,
-        0.0, 0.5, 0.5, 1.0,
+        0.5, -0.5, 10.0, 0.0,
+        0.0, 0.5, 5.0, 10.0,
     ]),
 )
 
