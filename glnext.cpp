@@ -1747,6 +1747,7 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
         "depth_test",
         "depth_write",
         "blending",
+        "primitive_restart",
         "topology",
         "samplers",
         "memory",
@@ -1767,6 +1768,7 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
         VkBool32 depth_test = true;
         VkBool32 depth_write = true;
         VkBool32 blending = false;
+        VkBool32 primitive_restart = false;
         PyObject * topology = default_topology;
         PyObject * samplers = Py_None;
         PyObject * memory = Py_None;
@@ -1775,7 +1777,7 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$O!O!OOIIIIOOpppOOO",
+        "|$O!O!OOIIIIOOppppOOO",
         keywords,
         &PyBytes_Type,
         &args.vertex_shader,
@@ -1792,6 +1794,7 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
         &args.depth_test,
         &args.depth_write,
         &args.blending,
+        &args.primitive_restart,
         &args.topology,
         &args.samplers,
         &args.memory
@@ -2083,7 +2086,7 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
         NULL,
         0,
         get_topology(args.topology),
-        true,
+        args.primitive_restart,
     };
 
     VkPipelineViewportStateCreateInfo pipeline_viewport_state = {
