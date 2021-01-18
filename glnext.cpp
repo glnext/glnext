@@ -1430,6 +1430,10 @@ Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * 
     uint32_t output_count = (uint32_t)PyList_Size(format_list);
     ImageMode image_mode = get_image_mode(args.mode);
 
+    VkImageUsageFlags image_usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if (image_mode == IMG_TEXTURE) {
+        image_usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
     Renderer * res = PyObject_New(Renderer, Renderer_type);
 
     res->instance = self;
@@ -1494,7 +1498,7 @@ Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * 
             self,
             memory,
             args.width * args.height * args.layers * format.size,
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            image_usage | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             {args.width, args.height, 1},
             VK_SAMPLE_COUNT_1_BIT,
             args.levels,
