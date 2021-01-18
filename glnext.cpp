@@ -2506,7 +2506,7 @@ PyObject * Instance_meth_execute(Instance * self, PyObject * vargs, PyObject * k
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "O",
+        "|O",
         keywords,
         &args.update
     );
