@@ -1099,7 +1099,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     Image * res = new_image({
         self,
         memory,
-        args.width * args.height * format.size,
+        args.width * args.height * args.layers * format.size,
         image_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         {args.width, args.height, 1},
         args.samples,
@@ -1493,7 +1493,7 @@ Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * 
         resolve_image_array[i] = new_image({
             self,
             memory,
-            args.width * args.height * format.size,
+            args.width * args.height * args.layers * format.size,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
             {args.width, args.height, 1},
             VK_SAMPLE_COUNT_1_BIT,
