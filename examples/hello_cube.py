@@ -53,6 +53,6 @@ pipeline = renderer.pipeline(
 renderer.update(uniform_buffer=glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0)))
 pipeline.update(vertex_buffer=white_cube)
 
-instance.execute()
+instance.render()
 data = renderer.output[0].read()
 Image.frombuffer('RGB', (512, 512), data, 'raw', 'BGRX', 0, -1).show()

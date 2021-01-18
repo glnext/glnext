@@ -46,6 +46,6 @@ pipeline = renderer.pipeline(
     instance_count=9,
 )
 
-instance.execute()
+instance.render()
 data = renderer.output[0].read()
 Image.frombuffer('RGB', (512, 512), data, 'raw', 'BGRX', 0, -1).show()

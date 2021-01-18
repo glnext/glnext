@@ -36,7 +36,7 @@ pipeline = renderer.pipeline(
     vertex_count=3,
 )
 
-instance.execute()
+instance.render()
 data1 = renderer.output[0].read()
 data2 = renderer.output[1].read()
 

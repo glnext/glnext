@@ -2524,7 +2524,7 @@ PyObject * Image_meth_read(Image * self) {
     return PyBytes_FromStringAndSize((char *)self->instance->host_memory->ptr, self->size);
 }
 
-PyObject * Instance_meth_execute(Instance * self, PyObject * vargs, PyObject * kwargs) {
+PyObject * Instance_meth_render(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "update",
         NULL,
@@ -2845,7 +2845,7 @@ PyMethodDef Instance_methods[] = {
     {"renderer", (PyCFunction)Instance_meth_renderer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
     {"sampler", (PyCFunction)Instance_meth_sampler, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"execute", (PyCFunction)Instance_meth_execute, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"render", (PyCFunction)Instance_meth_render, METH_VARARGS | METH_KEYWORDS, NULL},
     {},
 };
 
