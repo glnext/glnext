@@ -1506,6 +1506,10 @@ Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * 
 
     allocate_memory(memory);
 
+    if (args.uniform_buffer) {
+        bind_buffer(res->uniform_buffer);
+    }
+
     if (args.depth) {
         bind_image(depth_image);
     }
@@ -1808,6 +1812,8 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
         args.samplers = empty_list;
     }
 
+    Memory * memory = get_memory(self->instance, args.memory);
+
     Pipeline * res = PyObject_New(Pipeline, Pipeline_type);
 
     res->instance = self->instance;
@@ -1854,10 +1860,65 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
         binding_array[i] = {i, istride, VK_VERTEX_INPUT_RATE_INSTANCE};
     }
 
-    res->vertex_buffer = NULL;  // TODO: restore
-    res->instance_buffer = NULL;  // TODO: restore
-    res->index_buffer = NULL;  // TODO: restore
-    res->indirect_buffer = NULL;  // TODO: restore
+    VkBool32 short_index = false;
+    uint32_t index_size = short_index ? 2 : 4;
+    uint32_t indirect_size = args.index_count ? 20 : 16;
+
+    res->vertex_buffer = NULL;
+    res->instance_buffer = NULL;
+    res->index_buffer = NULL;
+    res->indirect_buffer = NULL;
+
+    if (vstride * args.vertex_count) {
+        res->vertex_buffer = new_buffer({
+            self->instance,
+            memory,
+            vstride * args.vertex_count,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        });
+    }
+
+    if (istride * args.instance_count) {
+        res->instance_buffer = new_buffer({
+            self->instance,
+            memory,
+            istride * args.instance_count,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        });
+    }
+
+    if (args.index_count) {
+        res->index_buffer = new_buffer({
+            self->instance,
+            memory,
+            args.index_count * index_size,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        });
+    }
+
+    if (args.indirect_count) {
+        res->indirect_buffer = new_buffer({
+            self->instance,
+            memory,
+            args.indirect_count * indirect_size,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+        });
+    }
+
+    allocate_memory(memory);
+
+    if (res->vertex_buffer) {
+        bind_buffer(res->vertex_buffer);
+    }
+    if (res->instance_buffer) {
+        bind_buffer(res->instance_buffer);
+    }
+    if (res->index_buffer) {
+        bind_buffer(res->index_buffer);
+    }
+    if (res->indirect_buffer) {
+        bind_buffer(res->indirect_buffer);
+    }
 
     VkBuffer vertex_buffer_array[64];
     for (uint32_t i = 0; i < attribute_count; ++i) {
