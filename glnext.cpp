@@ -2493,6 +2493,33 @@ PyObject * Image_meth_write(Image * self, PyObject * vargs, PyObject * kwargs) {
     Py_RETURN_NONE;
 }
 
+PyObject * Image_meth_read(Image * self) {
+    resize_buffer(self->instance->host_buffer, self->size);
+
+    VkCommandBuffer cmd = begin_commands(self->instance);
+
+    VkBufferImageCopy copy = {
+        0,
+        self->extent.width,
+        self->extent.height,
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, self->layers},
+        {0, 0, 0},
+        self->extent,
+    };
+
+    vkCmdCopyImageToBuffer(
+        cmd,
+        self->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        self->instance->host_buffer->buffer,
+        1,
+        &copy
+    );
+
+    end_commands(self->instance);
+    return PyBytes_FromStringAndSize((char *)self->instance->host_memory->ptr, self->size);
+}
+
 PyObject * Instance_meth_execute(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "update",
@@ -2837,6 +2864,7 @@ PyMethodDef Pipeline_methods[] = {
 
 PyMethodDef Image_methods[] = {
     {"write", (PyCFunction)Image_meth_write, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"read", (PyCFunction)Image_meth_read, METH_NOARGS, NULL},
     {},
 };
 
