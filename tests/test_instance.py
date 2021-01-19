@@ -1,11 +1,8 @@
+import os
 import glnext
 import pytest
 
-layers = [
-    'VK_LAYER_LUNARG_core_validation',
-    'VK_LAYER_LUNARG_parameter_validation',
-    'VK_LAYER_LUNARG_standard_validation',
-]
+layers = os.getenv('TEST_VULKAN_LAYERS', '').split()
 
 
 def test_instance_simple():
