@@ -40,8 +40,17 @@ glnext = Extension(
     libraries=libraries,
 )
 
+with open('README.md') as readme:
+    long_description = readme.read()
+
 setup(
     name='glnext',
-    version='0.1.0',
+    version='0.2.0',
     ext_modules=[glnext],
+    long_description=long_description,
+    long_description_content_type='text/markdown',
+    url='https://github.com/cprogrammer1994/glnext',
+    author='Szabolcs Dombi',
+    author_email='cprogrammer1994@gmail.com',
+    license='MIT',
 )
