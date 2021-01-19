@@ -1,12 +1,26 @@
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
 
 #include <vulkan/vulkan_core.h>
 
-#if defined(_WIN32) || defined(_WIN64)
+#ifdef BUILD_WINDOWS
 #include <Windows.h>
 #include <vulkan/vulkan_win32.h>
+#define SURFACE_EXTENSION "VK_KHR_win32_surface"
+#endif
+
+#ifdef BUILD_DARWIN
+#include <QuartzCore/CAMetalLayer.h>
+#include <vulkan/vulkan_metal.h>
+#define SURFACE_EXTENSION "VK_EXT_metal_surface"
+#endif
+
+#ifdef BUILD_LINUX
+#include <X11/Xlib.h>
+#include <vulkan/vulkan_xlib.h>
+#define SURFACE_EXTENSION "VK_KHR_xlib_surface"
 #endif
 
 enum PackType {
@@ -85,6 +99,7 @@ struct Renderer {
     uint32_t samples;
     uint32_t levels;
     uint32_t layers;
+    VkBool32 depth;
     VkRenderPass render_pass;
     PyObject * framebuffers;
     PyObject * resolve_images;
@@ -246,8 +261,8 @@ VkCommandBuffer begin_commands(Instance * instance) {
     return instance->command_buffer;
 }
 
-void end_commands(Instance * instance) {
-    vkEndCommandBuffer(instance->command_buffer);
+void end_commands(Instance * instance, VkCommandBuffer command_buffer) {
+    vkEndCommandBuffer(command_buffer);
 
     VkSubmitInfo submit_info = {
         VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -256,7 +271,7 @@ void end_commands(Instance * instance) {
         NULL,
         NULL,
         1,
-        &instance->command_buffer,
+        &command_buffer,
         0,
         NULL,
     };
@@ -343,23 +358,27 @@ void resize_buffer(Buffer * self, VkDeviceSize size) {
     bind_buffer(self);
 }
 
-void update_buffer(Buffer * self, PyObject * data) {
+int update_buffer(Buffer * self, PyObject * data) {
     if (data == Py_None) {
-        return;
+        return 0;
     }
 
     Py_buffer view = {};
-    PyObject_GetBuffer(data, &view, PyBUF_STRIDED_RO);
+    if (PyObject_GetBuffer(data, &view, PyBUF_STRIDED_RO)) {
+        return -1;
+    }
+
     resize_buffer(self->instance->host_buffer, (VkDeviceSize)view.len);
     PyBuffer_ToContiguous(self->instance->host_memory->ptr, &view, view.len, 'C');
 
-    VkCommandBuffer cmd = begin_commands(self->instance);
+    VkCommandBuffer command_buffer = begin_commands(self->instance);
 
     VkBufferCopy copy = {0, 0, (VkDeviceSize)view.len};
-    vkCmdCopyBuffer(cmd, self->instance->host_buffer->buffer, self->buffer, 1, &copy);
+    vkCmdCopyBuffer(command_buffer, self->instance->host_buffer->buffer, self->buffer, 1, &copy);
 
-    end_commands(self->instance);
+    end_commands(self->instance, command_buffer);
     PyBuffer_Release(&view);
+    return 0;
 }
 
 struct new_memory_args {
@@ -500,6 +519,7 @@ Format get_format(PyObject * name) {
     if (!strcmp(s, "2x")) return {VK_FORMAT_UNDEFINED, 2, PACK_PAD, 2};
     if (!strcmp(s, "3x")) return {VK_FORMAT_UNDEFINED, 3, PACK_PAD, 3};
     if (!strcmp(s, "4x")) return {VK_FORMAT_UNDEFINED, 4, PACK_PAD, 4};
+    if (!strcmp(s, "8x")) return {VK_FORMAT_UNDEFINED, 8, PACK_PAD, 8};
     PyErr_Format(PyExc_ValueError, "format");
     return {};
 }
@@ -828,25 +848,185 @@ void render(VkCommandBuffer cmd, Renderer * renderer) {
     }
 }
 
+void end_commands_with_present(Instance * self, VkCommandBuffer cmd) {
+    if (self->presenter.surface_count) {
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[64];
+
+        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->presenter.image_array[i][self->presenter.index_array[i]],
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            };
+        }
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        vkCmdCopyImage(
+            cmd,
+            self->presenter.image_source_array[i],
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            self->presenter.image_array[i][self->presenter.index_array[i]],
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &self->presenter.image_copy_array[i]
+        );
+    }
+
+    if (self->presenter.surface_count) {
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[64];
+
+        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->presenter.image_array[i][self->presenter.index_array[i]],
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            };
+        }
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+
+    vkEndCommandBuffer(cmd);
+
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        vkAcquireNextImageKHR(
+            self->device,
+            self->presenter.swapchain_array[i],
+            UINT64_MAX,
+            self->presenter.semaphore_array[i],
+            NULL,
+            &self->presenter.index_array[i]
+        );
+    }
+
+    VkSubmitInfo submit_info = {
+        VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        NULL,
+        self->presenter.surface_count,
+        self->presenter.semaphore_array,
+        self->presenter.wait_stage_array,
+        1,
+        &cmd,
+        0,
+        NULL,
+    };
+
+    vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
+    vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
+    vkResetFences(self->device, 1, &self->fence);
+
+    if (self->presenter.surface_count) {
+        VkPresentInfoKHR present_info = {
+            VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            NULL,
+            0,
+            NULL,
+            self->presenter.surface_count,
+            self->presenter.swapchain_array,
+            self->presenter.index_array,
+            self->presenter.result_array,
+        };
+
+        vkQueuePresentKHR(self->queue, &present_info);
+
+        uint32_t idx = 0;
+        while (idx < self->presenter.surface_count) {
+            if (self->presenter.result_array[idx] == VK_ERROR_OUT_OF_DATE_KHR) {
+                vkDestroySemaphore(self->device, self->presenter.semaphore_array[idx], NULL);
+                vkDestroySwapchainKHR(self->device, self->presenter.swapchain_array[idx], NULL);
+                vkDestroySurfaceKHR(self->instance, self->presenter.surface_array[idx], NULL);
+                presenter_remove(&self->presenter, idx);
+                continue;
+            }
+            idx += 1;
+        }
+    }
+}
+
 Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kwargs) {
-    static char * keywords[] = {"physical_device", "host_memory", "device_memory", "staging_buffer", NULL};
+    static char * keywords[] = {
+        "physical_device",
+        "host_memory",
+        "device_memory",
+        "staging_buffer",
+        "headless",
+        "application_name",
+        "application_version",
+        "engine_name",
+        "engine_version",
+        "layers",
+        NULL,
+    };
 
     struct {
         uint32_t physical_device = 0;
         VkDeviceSize host_memory_size = 0;
         VkDeviceSize device_memory_size = 0;
         VkDeviceSize staging_buffer_size = 0;
+        const char * application_name = "application";
+        uint32_t application_version = 0;
+        const char * engine_name = "engine";
+        uint32_t engine_version = 0;
+        VkBool32 headless = false;
+        PyObject * layers = Py_None;
     } args;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$Ikkk",
+        "|$IkkkpsIsIO",
         keywords,
         &args.physical_device,
         &args.host_memory_size,
         &args.device_memory_size,
-        &args.staging_buffer_size
+        &args.staging_buffer_size,
+        &args.application_name,
+        &args.application_version,
+        &args.engine_name,
+        &args.engine_version,
+        &args.headless,
+        &args.layers
     );
 
     if (!args_ok) {
@@ -855,6 +1035,10 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 
     if (args.host_memory_size < 64 * 1024) {
         args.host_memory_size = 64 * 1024;
+    }
+
+    if (args.layers == Py_None) {
+        args.layers = empty_list;
     }
 
     Instance * res = PyObject_New(Instance, Instance_type);
@@ -877,34 +1061,62 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     VkApplicationInfo application_info = {
         VK_STRUCTURE_TYPE_APPLICATION_INFO,
         NULL,
-        "application",
-        0,
-        "engine",
-        0,
+        args.application_name,
+        args.application_version,
+        args.engine_name,
+        args.engine_version,
         VK_API_VERSION_1_0,
     };
 
-    const char * instance_layer_array[] = {"VK_LAYER_KHRONOS_validation", "VK_LAYER_LUNARG_gfxreconstruct"};
-    const char * instance_extension_array[] = {"VK_EXT_debug_utils", "VK_KHR_surface", "VK_KHR_win32_surface"};
+    uint32_t instance_layer_count = 0;
+    uint32_t instance_extension_count = 0;
+    uint32_t device_extension_count = 0;
+
+    const char * instance_layer_array[64];
+    const char * instance_extension_array[8];
+    const char * device_extension_array[8];
+
+    for (uint32_t i = 0; i < PyList_Size(args.layers); ++i) {
+        instance_layer_array[instance_layer_count++] = PyUnicode_AsUTF8(PyList_GetItem(args.layers, i));
+    }
+
+    #ifndef BUILD_HEADLESS
+    if (!args.headless) {
+        instance_extension_array[instance_extension_count++] = SURFACE_EXTENSION;
+        instance_extension_array[instance_extension_count++] = "VK_KHR_surface";
+        device_extension_array[device_extension_count++] = "VK_KHR_swapchain";
+    }
+    #endif
 
     VkInstanceCreateInfo instance_create_info = {
         VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         NULL,
         0,
         &application_info,
-        1,
+        instance_layer_count,
         instance_layer_array,
-        3,
+        instance_extension_count,
         instance_extension_array,
     };
 
+    res->instance = NULL;
     vkCreateInstance(&instance_create_info, NULL, &res->instance);
+
+    if (!res->instance) {
+        PyErr_Format(PyExc_RuntimeError, "cannot create instance");
+        return NULL;
+    }
 
     uint32_t physical_device_count = 0;
     VkPhysicalDevice physical_device_array[64] = {};
     vkEnumeratePhysicalDevices(res->instance, &physical_device_count, NULL);
     vkEnumeratePhysicalDevices(res->instance, &physical_device_count, physical_device_array);
     res->physical_device = physical_device_array[args.physical_device];
+
+    if (!res->physical_device) {
+        PyErr_Format(PyExc_RuntimeError, "physical device not found");
+        return NULL;
+    }
 
     VkPhysicalDeviceMemoryProperties device_memory_properties = {};
     vkGetPhysicalDeviceMemoryProperties(res->physical_device, &device_memory_properties);
@@ -967,8 +1179,6 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     physical_device_features.multiDrawIndirect = supported_features.multiDrawIndirect;
     physical_device_features.samplerAnisotropy = supported_features.samplerAnisotropy;
 
-    const char * device_extension_array[] = {"VK_KHR_swapchain"};
-
     VkDeviceCreateInfo device_create_info = {
         VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         NULL,
@@ -977,12 +1187,19 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         &device_queue_create_info,
         0,
         NULL,
-        1,
+        device_extension_count,
         device_extension_array,
         &physical_device_features,
     };
 
+    res->device = NULL;
     vkCreateDevice(res->physical_device, &device_create_info, NULL, &res->device);
+
+    if (!res->device) {
+        PyErr_Format(PyExc_RuntimeError, "cannot create device");
+        return NULL;
+    }
+
     vkGetDeviceQueue(res->device, res->queue_family_index, 0, &res->queue);
 
     VkFenceCreateInfo fence_create_info = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, NULL, 0};
@@ -1049,7 +1266,6 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     static char * keywords[] = {
         "size",
         "format",
-        "samples",
         "levels",
         "layers",
         "mode",
@@ -1061,7 +1277,6 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
         uint32_t width;
         uint32_t height;
         PyObject * format = default_format;
-        uint32_t samples = 1;
         uint32_t levels = 1;
         uint32_t layers = 1;
         PyObject * mode = texture_str;
@@ -1071,12 +1286,11 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "(II)|O$IIIOO",
+        "(II)|O$IIOO",
         keywords,
         &args.width,
         &args.height,
         &args.format,
-        &args.samples,
         &args.levels,
         &args.layers,
         &args.mode,
@@ -1091,6 +1305,11 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     ImageMode image_mode = get_image_mode(args.mode);
     Format format = get_format(args.format);
 
+    if (args.levels > 1 && image_mode == IMG_OUTPUT) {
+        PyErr_Format(PyExc_ValueError, "invalid mode");
+        return NULL;
+    }
+
     VkImageUsageFlags image_usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     if (image_mode == IMG_TEXTURE) {
         image_usage = VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -1102,7 +1321,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
         args.width * args.height * args.layers * format.size,
         image_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         {args.width, args.height, 1},
-        args.samples,
+        1,
         args.levels,
         args.layers,
         image_mode,
@@ -1112,7 +1331,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     allocate_memory(memory);
     bind_image(res);
 
-    VkCommandBuffer cmd = begin_commands(self);
+    VkCommandBuffer command_buffer = begin_commands(self);
 
     VkImageLayout image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     if (image_mode == IMG_TEXTURE) {
@@ -1133,7 +1352,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     };
 
     vkCmdPipelineBarrier(
-        cmd,
+        command_buffer,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0,
@@ -1145,7 +1364,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
         &image_barrier_transfer
     );
 
-    end_commands(self);
+    end_commands(self, command_buffer);
 
     PyList_Append(self->image_list, (PyObject *)res);
     return res;
@@ -1260,6 +1479,7 @@ Sampler * Instance_meth_sampler(Instance * self, PyObject * vargs, PyObject * kw
     return res;
 }
 
+#ifndef BUILD_HEADLESS
 PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "window",
@@ -1268,14 +1488,14 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
     };
 
     struct {
-        void * window;
+        PyObject * window;
         Image * image;
     } args;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "n|O!",
+        "O|O!",
         keywords,
         &args.window,
         Image_type,
@@ -1286,27 +1506,48 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
         return NULL;
     }
 
-    #if defined(_WIN32) || defined(_WIN64)
+    #ifdef BUILD_WINDOWS
+    HWND hwnd = (HWND)PyLong_AsVoidPtr(args.window);
 
     VkWin32SurfaceCreateInfoKHR surface_create_info = {
         VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
         NULL,
         0,
         NULL,
-        (HWND)args.window,
+        hwnd,
     };
 
     VkSurfaceKHR surface = NULL;
     vkCreateWin32SurfaceKHR(self->instance, &surface_create_info, NULL, &surface);
+    #endif
 
-    #elif defined(__APPLE__)
+    #ifdef BUILD_LINUX
+    Window wnd = (Window)PyLong_AsUnsignedLong(args.window);
 
-    // TODO:
+    VkXlibSurfaceCreateInfoKHR surface_create_info = {
+        VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+        NULL,
+        0,
+        NULL,
+        wnd,
+    };
 
-    #else
+    VkSurfaceKHR surface = NULL;
+    vkCreateXlibSurfaceKHR(self->instance, &surface_create_info, NULL, &surface);
+    #endif
 
-    // TODO:
+    #ifdef BUILD_DARWIN
+    CAMetalLayer * layer = (CAMetalLayer *)PyLong_AsVoidPtr(args.window);
 
+    VkMetalSurfaceCreateInfoEXT surface_create_info = {
+        VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+        NULL,
+        0,
+        layer,
+    };
+
+    VkSurfaceKHR surface = NULL;
+    vkCreateMetalSurfaceEXT(self->instance, &surface_create_info, NULL, &surface);
     #endif
 
     VkBool32 present_support = false;
@@ -1375,6 +1616,7 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
 
     Py_RETURN_NONE;
 }
+#endif
 
 Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
@@ -1442,6 +1684,7 @@ Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * 
     res->samples = args.samples;
     res->levels = args.levels;
     res->layers = args.layers;
+    res->depth = args.depth;
 
     res->pipeline_list = PyList_New(0);
 
@@ -1455,7 +1698,7 @@ Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * 
         });
     }
 
-    Image * depth_image;
+    Image * depth_image = NULL;
     Image * color_image_array[64];
     Image * resolve_image_array[64];
 
@@ -1536,7 +1779,7 @@ Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * 
     uint32_t description_count = 0;
     VkAttachmentDescription description_array[130];
 
-    if (args.depth) {
+    if (depth_image) {
         description_array[description_count++] = {
             0,
             depth_image->format,
@@ -1550,7 +1793,7 @@ Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * 
         };
     }
 
-    if (args.format) {
+    if (args.samples) {
         for (uint32_t i = 0; i < output_count; ++i) {
             description_array[description_count++] = {
                 0,
@@ -2278,13 +2521,14 @@ Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * 
 }
 
 PyObject * Renderer_meth_update(Renderer * self, PyObject * vargs, PyObject * kwargs) {
-    static char * keywords[] = {"size", "uniform_buffer", "clear_values", NULL};
+    static char * keywords[] = {"size", "uniform_buffer", "clear_color", "clear_depth", NULL};
 
     struct {
         uint32_t width;
         uint32_t height;
         PyObject * uniform_buffer = Py_None;
-        PyObject * clear_values = Py_None;
+        PyObject * clear_color = Py_None;
+        PyObject * clear_depth = Py_None;
     } args;
 
     args.width = self->width;
@@ -2293,40 +2537,48 @@ PyObject * Renderer_meth_update(Renderer * self, PyObject * vargs, PyObject * kw
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$(II)OO",
+        "|$(II)OOO",
         keywords,
         &args.width,
         &args.height,
         &args.uniform_buffer,
-        &args.clear_values
+        &args.clear_color,
+        &args.clear_depth
     );
 
     if (!args_ok) {
         return NULL;
     }
 
-    update_buffer(self->uniform_buffer, args.uniform_buffer);
-
-    if (args.clear_values != Py_None) {
-        Py_buffer view = {};
-        PyObject_GetBuffer(args.clear_values, &view, PyBUF_STRIDED_RO);
-        PyBuffer_ToContiguous(PyBytes_AsString(self->clear_values), &view, view.len, 'C');
-        PyBuffer_Release(&view);
+    if (update_buffer(self->uniform_buffer, args.uniform_buffer)) {
+        return NULL;
     }
 
-    Py_RETURN_NONE;
-}
+    VkClearValue * clear_value_array = NULL;
+    uint32_t clear_value_count = retreive_array(self->clear_values, &clear_value_array);
 
-PyObject * Renderer_meth_render(Renderer * self, PyObject * vargs, PyObject * kwargs) {
-    static char * keywords[] = {"size", NULL};
+    if (args.clear_depth != Py_None) {
+        if (!PyFloat_Check(args.clear_depth)) {
+            PyErr_Format(PyExc_TypeError, "expected float");
+            return NULL;
+        }
+        clear_value_array[0].depthStencil.depth = (float)PyFloat_AsDouble(args.clear_depth);
+    }
 
-    struct {
-        uint32_t width;
-        uint32_t height;
-    } args;
+    if (args.clear_color != Py_None) {
+        Py_buffer view = {};
+        if (PyObject_GetBuffer(args.clear_color, &view, PyBUF_STRIDED_RO)) {
+            return NULL;
+        }
 
-    if (!PyArg_ParseTupleAndKeywords(vargs, kwargs, "|(II)", keywords, &args.width, &args.height)) {
-        return NULL;
+        if (view.len != clear_value_count * 16 - (self->depth ? 16 : 0)) {
+            PyBuffer_Release(&view);
+            PyErr_Format(PyExc_ValueError, "wrong size");
+            return NULL;
+        }
+
+        PyBuffer_ToContiguous(clear_value_array + (self->depth ? 1 : 0), &view, view.len, 'C');
+        PyBuffer_Release(&view);
     }
 
     Py_RETURN_NONE;
@@ -2404,12 +2656,17 @@ PyObject * Image_meth_write(Image * self, PyObject * vargs, PyObject * kwargs) {
         return NULL;
     }
 
+    if (args.data.len != self->size) {
+        PyErr_Format(PyExc_ValueError, "wrong size");
+        return NULL;
+    }
+
     resize_buffer(self->instance->host_buffer, (VkDeviceSize)args.data.len);
 
     PyBuffer_ToContiguous(self->instance->host_memory->ptr, &args.data, args.data.len, 'C');
     PyBuffer_Release(&args.data);
 
-    VkCommandBuffer cmd = begin_commands(self->instance);
+    VkCommandBuffer command_buffer = begin_commands(self->instance);
 
     VkImageLayout image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     if (self->mode == IMG_TEXTURE) {
@@ -2430,7 +2687,7 @@ PyObject * Image_meth_write(Image * self, PyObject * vargs, PyObject * kwargs) {
     };
 
     vkCmdPipelineBarrier(
-        cmd,
+        command_buffer,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0,
@@ -2452,7 +2709,7 @@ PyObject * Image_meth_write(Image * self, PyObject * vargs, PyObject * kwargs) {
     };
 
     vkCmdCopyBufferToImage(
-        cmd,
+        command_buffer,
         self->instance->host_buffer->buffer,
         self->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -2475,7 +2732,7 @@ PyObject * Image_meth_write(Image * self, PyObject * vargs, PyObject * kwargs) {
         };
 
         vkCmdPipelineBarrier(
-            cmd,
+            command_buffer,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
@@ -2488,7 +2745,7 @@ PyObject * Image_meth_write(Image * self, PyObject * vargs, PyObject * kwargs) {
         );
     } else {
         build_mipmaps({
-            cmd,
+            command_buffer,
             self->extent.width,
             self->extent.height,
             self->levels,
@@ -2498,14 +2755,19 @@ PyObject * Image_meth_write(Image * self, PyObject * vargs, PyObject * kwargs) {
         });
     }
 
-    end_commands(self->instance);
+    end_commands(self->instance, command_buffer);
     Py_RETURN_NONE;
 }
 
 PyObject * Image_meth_read(Image * self) {
+    if (self->mode != IMG_OUTPUT) {
+        PyErr_Format(PyExc_ValueError, "not an output image");
+        return NULL;
+    }
+
     resize_buffer(self->instance->host_buffer, self->size);
 
-    VkCommandBuffer cmd = begin_commands(self->instance);
+    VkCommandBuffer command_buffer = begin_commands(self->instance);
 
     VkBufferImageCopy copy = {
         0,
@@ -2517,7 +2779,7 @@ PyObject * Image_meth_read(Image * self) {
     };
 
     vkCmdCopyImageToBuffer(
-        cmd,
+        command_buffer,
         self->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         self->instance->host_buffer->buffer,
@@ -2525,7 +2787,7 @@ PyObject * Image_meth_read(Image * self) {
         &copy
     );
 
-    end_commands(self->instance);
+    end_commands(self->instance, command_buffer);
     return PyBytes_FromStringAndSize((char *)self->instance->host_memory->ptr, self->size);
 }
 
@@ -2562,147 +2824,23 @@ PyObject * Instance_meth_render(Instance * self, PyObject * vargs, PyObject * kw
     // copy images -> staging buffer
     // copy images -> swapchain images
 
-    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-        vkAcquireNextImageKHR(
-            self->device,
-            self->presenter.swapchain_array[i],
-            UINT64_MAX,
-            self->presenter.semaphore_array[i],
-            NULL,
-            &self->presenter.index_array[i]
-        );
-    }
-
-    VkCommandBuffer cmd = begin_commands(self);
+    VkCommandBuffer command_buffer = begin_commands(self);
 
     for (uint32_t i = 0; i < PyList_Size(self->renderer_list); ++i) {
         Renderer * renderer = (Renderer *)PyList_GetItem(self->renderer_list, i);
-        render(cmd, renderer);
+        render(command_buffer, renderer);
     }
 
-    if (self->presenter.surface_count) {
-        uint32_t image_barrier_count = 0;
-        VkImageMemoryBarrier image_barrier_array[64];
+    #ifndef BUILD_HEADLESS
+    end_commands_with_present(self, command_buffer);
+    #else
+    end_commands(self, command_buffer);
+    #endif
 
-        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-            image_barrier_array[image_barrier_count++] = {
-                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                NULL,
-                0,
-                0,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_QUEUE_FAMILY_IGNORED,
-                VK_QUEUE_FAMILY_IGNORED,
-                self->presenter.image_array[i][self->presenter.index_array[i]],
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-            };
-        }
+    Py_RETURN_NONE;
+}
 
-        vkCmdPipelineBarrier(
-            cmd,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0,
-            NULL,
-            0,
-            NULL,
-            image_barrier_count,
-            image_barrier_array
-        );
-    }
-
-    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-        vkCmdCopyImage(
-            cmd,
-            self->presenter.image_source_array[i],
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            self->presenter.image_array[i][self->presenter.index_array[i]],
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1,
-            &self->presenter.image_copy_array[i]
-        );
-    }
-
-    if (self->presenter.surface_count) {
-        uint32_t image_barrier_count = 0;
-        VkImageMemoryBarrier image_barrier_array[64];
-
-        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-            image_barrier_array[image_barrier_count++] = {
-                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                NULL,
-                0,
-                0,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                VK_QUEUE_FAMILY_IGNORED,
-                VK_QUEUE_FAMILY_IGNORED,
-                self->presenter.image_array[i][self->presenter.index_array[i]],
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-            };
-        }
-
-        vkCmdPipelineBarrier(
-            cmd,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0,
-            NULL,
-            0,
-            NULL,
-            image_barrier_count,
-            image_barrier_array
-        );
-    }
-
-    vkEndCommandBuffer(self->command_buffer);
-
-    VkSubmitInfo submit_info = {
-        VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        NULL,
-        self->presenter.surface_count,
-        self->presenter.semaphore_array,
-        self->presenter.wait_stage_array,
-        1,
-        &self->command_buffer,
-        0,
-        NULL,
-    };
-
-    vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
-    vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
-    vkResetFences(self->device, 1, &self->fence);
-
-    if (self->presenter.surface_count) {
-        VkPresentInfoKHR present_info = {
-            VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            NULL,
-            0,
-            NULL,
-            self->presenter.surface_count,
-            self->presenter.swapchain_array,
-            self->presenter.index_array,
-            self->presenter.result_array,
-        };
-
-        vkQueuePresentKHR(self->queue, &present_info);
-
-        uint32_t idx = 0;
-        while (idx < self->presenter.surface_count) {
-            if (self->presenter.result_array[idx] == VK_ERROR_OUT_OF_DATE_KHR) {
-                vkDestroySemaphore(self->device, self->presenter.semaphore_array[idx], NULL);
-                vkDestroySwapchainKHR(self->device, self->presenter.swapchain_array[idx], NULL);
-                vkDestroySurfaceKHR(self->instance, self->presenter.surface_array[idx], NULL);
-                presenter_remove(&self->presenter, idx);
-                continue;
-            }
-            idx += 1;
-        }
-    }
-
+PyObject * Instance_meth_release(Instance * self) {
     Py_RETURN_NONE;
 }
 
@@ -2791,6 +2929,7 @@ PyObject * glnext_meth_pack(PyObject * self, PyObject ** args, Py_ssize_t nargs)
 
     int row_size = 0;
     int format_count = 0;
+    int padding_format_count = 0;
     PackType format_array[256];
 
     if (nargs == 1) {
@@ -2801,6 +2940,9 @@ PyObject * glnext_meth_pack(PyObject * self, PyObject ** args, Py_ssize_t nargs)
         for (int k = 0; k < PyList_Size(vformat); ++k) {
             Format format = get_format(PyList_GetItem(vformat, k));
             row_size += format.size;
+            if (format.pack_type == PACK_PAD) {
+                padding_format_count += format.pack_count;
+            }
             for (int i = 0; i < format.pack_count; ++i) {
                 format_array[format_count++] = format.pack_type;
             }
@@ -2808,7 +2950,7 @@ PyObject * glnext_meth_pack(PyObject * self, PyObject ** args, Py_ssize_t nargs)
         Py_DECREF(vformat);
     }
 
-    int rows = (int)PySequence_Fast_GET_SIZE(seq) / format_count;
+    int rows = (int)PySequence_Fast_GET_SIZE(seq) / (format_count - padding_format_count);
 
     PyObject * res = PyBytes_FromStringAndSize(NULL, rows * row_size);
     char * data = PyBytes_AsString(res);
@@ -2846,11 +2988,15 @@ PyMemberDef Instance_members[] = {
 };
 
 PyMethodDef Instance_methods[] = {
+    #ifndef BUILD_HEADLESS
     {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
+    #endif
+
     {"renderer", (PyCFunction)Instance_meth_renderer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
     {"sampler", (PyCFunction)Instance_meth_sampler, METH_VARARGS | METH_KEYWORDS, NULL},
     {"render", (PyCFunction)Instance_meth_render, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"release", (PyCFunction)Instance_meth_release, METH_NOARGS, NULL},
     {},
 };
 
@@ -2862,7 +3008,6 @@ PyMemberDef Renderer_members[] = {
 PyMethodDef Renderer_methods[] = {
     {"pipeline", (PyCFunction)Renderer_meth_pipeline, METH_VARARGS | METH_KEYWORDS, NULL},
     {"update", (PyCFunction)Renderer_meth_update, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"render", (PyCFunction)Renderer_meth_render, METH_VARARGS | METH_KEYWORDS, NULL},
     {},
 };
 
