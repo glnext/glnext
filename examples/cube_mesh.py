@@ -1,5 +1,6 @@
 
 import glnext
+from glnext_compiler import glsl
 
 white_cube = glnext.pack([
     -1.0, -1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0,

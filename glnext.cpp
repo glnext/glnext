@@ -1,15 +1,27 @@
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
 
 #include <vulkan/vulkan_core.h>
 
-struct Context;
-struct Memory;
-struct Renderer;
-struct Buffer;
-struct Image;
-struct Sampler;
+#ifdef BUILD_WINDOWS
+#include <Windows.h>
+#include <vulkan/vulkan_win32.h>
+#define SURFACE_EXTENSION "VK_KHR_win32_surface"
+#endif
+
+#ifdef BUILD_DARWIN
+#include <QuartzCore/CAMetalLayer.h>
+#include <vulkan/vulkan_metal.h>
+#define SURFACE_EXTENSION "VK_EXT_metal_surface"
+#endif
+
+#ifdef BUILD_LINUX
+#include <X11/Xlib.h>
+#include <vulkan/vulkan_xlib.h>
+#define SURFACE_EXTENSION "VK_KHR_xlib_surface"
+#endif
 
 enum PackType {
     PACK_FLOAT,
@@ -18,243 +30,214 @@ enum PackType {
     PACK_PAD,
 };
 
+enum ImageMode {
+    IMG_PROTECTED,
+    IMG_TEXTURE,
+    IMG_OUTPUT,
+};
+
+struct Format {
+    VkFormat format;
+    int size;
+    PackType pack_type;
+    int pack_count;
+};
+
+struct Presenter {
+    uint32_t surface_count;
+    VkSurfaceKHR * surface_array;
+    VkSwapchainKHR * swapchain_array;
+    VkPipelineStageFlags * wait_stage_array;
+    VkSemaphore * semaphore_array;
+    VkImage * image_source_array;
+    VkImageCopy * image_copy_array;
+    uint32_t * image_count_array;
+    VkImage ** image_array;
+    VkResult * result_array;
+    uint32_t * index_array;
+};
+
+struct Instance;
+struct Renderer;
+struct Pipeline;
+struct Memory;
+struct Buffer;
+struct Image;
+struct Sampler;
+
 struct Instance {
     PyObject_HEAD
-
     VkInstance instance;
     VkPhysicalDevice physical_device;
     VkDevice device;
     VkQueue queue;
-
+    VkFence fence;
     VkCommandPool command_pool;
     VkCommandBuffer command_buffer;
-    VkFence fence;
-
     uint32_t queue_family_index;
     uint32_t host_memory_type_index;
     uint32_t device_memory_type_index;
-
+    VkFormat depth_format;
+    Presenter presenter;
     Memory * device_memory;
     Memory * host_memory;
     Buffer * host_buffer;
-
-    PyObject * context_list;
+    Memory * staging_memory;
+    Buffer * staging_buffer;
+    PyObject * staging_memoryview;
+    PyObject * renderer_list;
     PyObject * memory_list;
     PyObject * buffer_list;
     PyObject * image_list;
 };
 
-struct ColorAttachment {
-    uint32_t size;
-    PackType pack_type;
-    uint32_t pack_count;
-    Image * image;
-    Image * resolve;
-};
-
-struct Context {
-    PyObject_HEAD
-
-    Instance * instance;
-
-    uint32_t width;
-    uint32_t height;
-    VkSampleCountFlagBits samples;
-    VkBool32 render_to_image;
-
-    VkRenderPass render_pass;
-    VkFramebuffer framebuffer;
-
-    uint32_t attachment_count;
-    VkImageView * attachment_image_view_array;
-
-    uint32_t color_attachment_count;
-    ColorAttachment * color_attachment_array;
-    VkClearValue * clear_value_array;
-
-    Image * depth_image;
-    Buffer * uniform_buffer;
-
-    PyObject * output;
-    PyObject * renderer_list;
-};
-
-struct Memory {
-    PyObject_HEAD
-
-    Instance * instance;
-
-    VkBool32 host;
-    VkDeviceSize size;
-    VkDeviceSize offset;
-    VkDeviceMemory memory;
-    void * ptr;
-};
-
 struct Renderer {
     PyObject_HEAD
+    Instance * instance;
+    uint32_t width;
+    uint32_t height;
+    uint32_t samples;
+    uint32_t levels;
+    uint32_t layers;
+    VkBool32 depth;
+    VkRenderPass render_pass;
+    PyObject * framebuffers;
+    PyObject * resolve_images;
+    PyObject * clear_values;
+    Buffer * uniform_buffer;
+    PyObject * output;
+    PyObject * pipeline_list;
+};
 
-    Context * ctx;
-    Memory * memory;
-
+struct Pipeline {
+    PyObject_HEAD
+    Instance * instance;
     Buffer * vertex_buffer;
     Buffer * instance_buffer;
     Buffer * index_buffer;
     Buffer * indirect_buffer;
-
     uint32_t vertex_count;
     uint32_t instance_count;
     uint32_t index_count;
     uint32_t indirect_count;
-    VkBool32 enabled;
-
-    VkIndexType index_type;
-
-    uint32_t vertex_buffer_count;
-    VkBuffer * vertex_buffer_array;
-    VkDeviceSize * vertex_offset_array;
-
     VkDescriptorSetLayout descriptor_set_layout;
     VkPipelineLayout pipeline_layout;
     VkDescriptorPool descriptor_pool;
     VkDescriptorSet descriptor_set;
     VkShaderModule vertex_shader_module;
     VkShaderModule fragment_shader_module;
+    PyObject * vertex_buffers;
     VkPipeline pipeline;
+};
 
-    uint32_t sampler_count;
-    VkSampler * sampler_array;
-    VkDescriptorImageInfo * sampler_binding_array;
-
-    PyObject * image_list;
+struct Memory {
+    PyObject_HEAD
+    Instance * instance;
+    VkDeviceSize offset;
+    VkDeviceSize size;
+    VkDeviceMemory memory;
+    VkBool32 host;
+    void * ptr;
 };
 
 struct Buffer {
     PyObject_HEAD
-
     Instance * instance;
     Memory * memory;
-
-    VkBufferUsageFlags usage;
     VkDeviceSize offset;
     VkDeviceSize size;
+    VkBufferUsageFlags usage;
     VkBuffer buffer;
 };
 
 struct Image {
     PyObject_HEAD
-
     Instance * instance;
     Memory * memory;
-
     VkDeviceSize offset;
     VkDeviceSize size;
     VkExtent3D extent;
-    VkSampleCountFlagBits samples;
+    uint32_t samples;
+    uint32_t levels;
+    uint32_t layers;
+    ImageMode mode;
     VkFormat format;
     VkImage image;
 };
 
 struct Sampler {
     PyObject_HEAD
-
     Image * image;
     VkSamplerCreateInfo info;
-    VkComponentMapping swizzle;
+    VkImageSubresourceRange subresource_range;
+    VkComponentMapping component_mapping;
 };
 
 PyTypeObject * Instance_type;
-PyTypeObject * Context_type;
-PyTypeObject * Memory_type;
 PyTypeObject * Renderer_type;
+PyTypeObject * Pipeline_type;
+PyTypeObject * Memory_type;
 PyTypeObject * Buffer_type;
 PyTypeObject * Image_type;
 PyTypeObject * Sampler_type;
 
-PyObject * default_framebuffer_format;
-PyObject * default_border;
-PyObject * empty_list;
 PyObject * empty_str;
-PyObject * sampler_address_mode_dict;
-PyObject * sampler_filter_dict;
-PyObject * mipmap_filter_dict;
-PyObject * float_border_dict;
-PyObject * int_border_dict;
-PyObject * topology_dict;
-PyObject * format_dict;
+PyObject * empty_list;
+PyObject * default_topology;
+PyObject * default_front_face;
+PyObject * default_border_color;
+PyObject * default_format;
+PyObject * default_filter;
+PyObject * default_address_mode;
+PyObject * default_swizzle;
+PyObject * texture_str;
+PyObject * output_str;
 
-int convert_address_mode(PyObject * obj, VkSamplerAddressMode * value) {
-    *value = (VkSamplerAddressMode)PyLong_AsUnsignedLong(PyDict_GetItem(sampler_address_mode_dict, obj));
-    return 1;
+template <typename T>
+void realloc_array(T ** array, uint32_t size) {
+    *array = (T *)PyMem_Realloc(*array, sizeof(T) * size);
 }
 
-int convert_filter(PyObject * obj, VkFilter * value) {
-    *value = (VkFilter)PyLong_AsUnsignedLong(PyDict_GetItem(sampler_filter_dict, obj));
-    return 1;
+void presenter_resize(Presenter * presenter) {
+    realloc_array(&presenter->surface_array, presenter->surface_count);
+    realloc_array(&presenter->swapchain_array, presenter->surface_count);
+    realloc_array(&presenter->wait_stage_array, presenter->surface_count);
+    realloc_array(&presenter->semaphore_array, presenter->surface_count);
+    realloc_array(&presenter->image_source_array, presenter->surface_count);
+    realloc_array(&presenter->image_copy_array, presenter->surface_count);
+    realloc_array(&presenter->image_count_array, presenter->surface_count);
+    realloc_array(&presenter->image_array, presenter->surface_count);
+    realloc_array(&presenter->result_array, presenter->surface_count);
+    realloc_array(&presenter->index_array, presenter->surface_count);
 }
 
-int convert_mipmap_filter(PyObject * obj, VkSamplerMipmapMode * value) {
-    *value = (VkSamplerMipmapMode)PyLong_AsUnsignedLong(PyDict_GetItem(mipmap_filter_dict, obj));
-    return 1;
-}
-
-void register_format(const char * name, VkFormat format, int size, PackType pack_type, int pack_count) {
-    PyObject * item = Py_BuildValue("IIII", format, size, pack_type, pack_count);
-    PyDict_SetItemString(format_dict, name, item);
-    Py_DECREF(item);
-}
-
-int list_index(PyObject * lst, void * obj) {
-    for (int i = 0; i < PyList_Size(lst); ++i) {
-        if (PyList_GetItem(lst, i) == (PyObject *)obj) {
-            return i;
-        }
+void presenter_remove(Presenter * presenter, uint32_t index) {
+    PyMem_Free(presenter->image_array[index]);
+    presenter->surface_count -= 1;
+    for (uint32_t i = index; i < presenter->surface_count; ++i) {
+        presenter->surface_array[i] = presenter->surface_array[i + 1];
+        presenter->swapchain_array[i] = presenter->swapchain_array[i + 1];
+        presenter->wait_stage_array[i] = presenter->wait_stage_array[i + 1];
+        presenter->semaphore_array[i] = presenter->semaphore_array[i + 1];
+        presenter->image_source_array[i] = presenter->image_source_array[i + 1];
+        presenter->image_copy_array[i] = presenter->image_copy_array[i + 1];
+        presenter->image_count_array[i] = presenter->image_count_array[i + 1];
+        presenter->image_array[i] = presenter->image_array[i + 1];
+        presenter->result_array[i] = presenter->result_array[i + 1];
+        presenter->index_array[i] = presenter->index_array[i + 1];
     }
-    return -1;
+    presenter_resize(presenter);
 }
 
-VkCommandBuffer begin_commands(Instance * self) {
-    VkCommandBufferBeginInfo command_buffer_begin_info = {
-        VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        NULL,
-        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-        NULL,
-    };
-
-    vkBeginCommandBuffer(self->command_buffer, &command_buffer_begin_info);
-    return self->command_buffer;
+template <typename T>
+PyObject * preserve_array(uint32_t size, T * array) {
+    return PyBytes_FromStringAndSize((char *)array, sizeof(T) * size);
 }
 
-void end_commands(Instance * self) {
-    vkEndCommandBuffer(self->command_buffer);
-
-    VkSubmitInfo submit_info = {
-        VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        NULL,
-        0,
-        NULL,
-        NULL,
-        1,
-        &self->command_buffer,
-        0,
-        NULL,
-    };
-
-    vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
-    vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
-    vkResetFences(self->device, 1, &self->fence);
-}
-
-Memory * new_memory(Instance * self, bool host) {
-    Memory * res = PyObject_New(Memory, Memory_type);
-    res->instance = self;
-    res->host = host;
-    res->memory = NULL;
-    res->ptr = NULL;
-    res->offset = 0;
-    res->size = 0;
-    PyList_Append(self->memory_list, (PyObject *)res);
-    return res;
+template <typename T>
+uint32_t retreive_array(PyObject * obj, T ** array) {
+    *array = (T *)PyBytes_AsString(obj);
+    return (uint32_t)PyBytes_Size(obj) / sizeof(T);
 }
 
 VkDeviceSize take_memory(Memory * self, VkMemoryRequirements requirements) {
@@ -264,6 +247,38 @@ VkDeviceSize take_memory(Memory * self, VkMemoryRequirements requirements) {
     VkDeviceSize res = self->offset;
     self->offset += requirements.size;
     return res;
+}
+
+VkCommandBuffer begin_commands(Instance * instance) {
+    VkCommandBufferBeginInfo command_buffer_begin_info = {
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        NULL,
+        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        NULL,
+    };
+
+    vkBeginCommandBuffer(instance->command_buffer, &command_buffer_begin_info);
+    return instance->command_buffer;
+}
+
+void end_commands(Instance * instance, VkCommandBuffer command_buffer) {
+    vkEndCommandBuffer(command_buffer);
+
+    VkSubmitInfo submit_info = {
+        VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        NULL,
+        0,
+        NULL,
+        NULL,
+        1,
+        &command_buffer,
+        0,
+        NULL,
+    };
+
+    vkQueueSubmit(instance->queue, 1, &submit_info, instance->fence);
+    vkWaitForFences(instance->device, 1, &instance->fence, true, UINT64_MAX);
+    vkResetFences(instance->device, 1, &instance->fence);
 }
 
 void allocate_memory(Memory * self, VkDeviceSize size = 0) {
@@ -295,110 +310,32 @@ void allocate_memory(Memory * self, VkDeviceSize size = 0) {
 }
 
 void free_memory(Memory * self) {
-    if (self->memory) {
-        if (self->host) {
-            vkUnmapMemory(self->instance->device, self->memory);
-        }
-        vkFreeMemory(self->instance->device, self->memory, NULL);
-        self->memory = NULL;
-        self->ptr = NULL;
-        self->offset = 0;
-        self->size = 0;
+    if (self->host) {
+        vkUnmapMemory(self->instance->device, self->memory);
     }
-}
-
-Buffer * new_buffer(Instance * self, VkDeviceSize size, VkBufferUsageFlags usage, Memory * memory) {
-    Buffer * res = PyObject_New(Buffer, Buffer_type);
-    res->instance = self;
-    res->memory = memory;
-    res->usage = usage;
-    res->buffer = NULL;
-    res->size = size;
-
-    if (!size) {
-        return res;
-    }
-
-    VkBufferCreateInfo buffer_create_info = {
-        VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        NULL,
-        0,
-        size,
-        usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_SHARING_MODE_EXCLUSIVE,
-        0,
-        NULL,
-    };
-
-    vkCreateBuffer(self->device, &buffer_create_info, NULL, &res->buffer);
-
-    VkMemoryRequirements requirements = {};
-    vkGetBufferMemoryRequirements(self->device, res->buffer, &requirements);
-    res->offset = take_memory(memory, requirements);
-
-    PyList_Append(self->buffer_list, (PyObject *)res);
-    return res;
-}
-
-Image * new_image(Instance * self, VkDeviceSize size, VkExtent3D extent, VkFormat format, VkFlags usage, VkSampleCountFlagBits samples, Memory * memory) {
-    Image * res = PyObject_New(Image, Image_type);
-    res->instance = self;
-    res->memory = memory;
-    res->image = NULL;
-    res->size = size;
-    res->extent = extent;
-    res->samples = samples;
-    res->format = format;
-
-    VkImageCreateInfo image_create_info = {
-        VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        NULL,
-        0,
-        VK_IMAGE_TYPE_2D,
-        format,
-        extent,
-        1,
-        1,
-        samples,
-        VK_IMAGE_TILING_OPTIMAL,
-        usage,
-        VK_SHARING_MODE_EXCLUSIVE,
-        0,
-        NULL,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-    };
-
-    vkCreateImage(self->device, &image_create_info, NULL, &res->image);
-
-    VkMemoryRequirements requirements = {};
-    vkGetImageMemoryRequirements(self->device, res->image, &requirements);
-    res->offset = take_memory(memory, requirements);
-
-    PyList_Append(self->image_list, (PyObject *)res);
-    return res;
+    vkFreeMemory(self->instance->device, self->memory, NULL);
+    self->memory = NULL;
+    self->ptr = NULL;
+    self->offset = 0;
+    self->size = 0;
 }
 
 void bind_buffer(Buffer * self) {
-    if (self->buffer) {
-        vkBindBufferMemory(self->instance->device, self->buffer, self->memory->memory, self->offset);
-    }
+    vkBindBufferMemory(self->instance->device, self->buffer, self->memory->memory, self->offset);
 }
 
 void bind_image(Image * self) {
-    if (self->image) {
-        vkBindImageMemory(self->instance->device, self->image, self->memory->memory, self->offset);
-    }
+    vkBindImageMemory(self->instance->device, self->image, self->memory->memory, self->offset);
 }
 
 void resize_buffer(Buffer * self, VkDeviceSize size) {
     if (size <= self->size) {
         return;
     }
+
     self->size = size;
 
-    if (self->buffer) {
-        vkDestroyBuffer(self->instance->device, self->buffer, NULL);
-    }
+    vkDestroyBuffer(self->instance->device, self->buffer, NULL);
     free_memory(self->memory);
 
     VkBufferCreateInfo buffer_create_info = {
@@ -406,7 +343,7 @@ void resize_buffer(Buffer * self, VkDeviceSize size) {
         NULL,
         0,
         size,
-        self->usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        self->usage,
         VK_SHARING_MODE_EXCLUSIVE,
         0,
         NULL,
@@ -421,51 +358,702 @@ void resize_buffer(Buffer * self, VkDeviceSize size) {
     bind_buffer(self);
 }
 
-void update_buffer(Buffer * self, PyObject * data) {
+int update_buffer(Buffer * self, PyObject * data) {
     if (data == Py_None) {
-        return;
+        return 0;
     }
 
     Py_buffer view = {};
-    PyObject_GetBuffer(data, &view, PyBUF_STRIDED_RO);
+    if (PyObject_GetBuffer(data, &view, PyBUF_STRIDED_RO)) {
+        return -1;
+    }
+
     resize_buffer(self->instance->host_buffer, (VkDeviceSize)view.len);
     PyBuffer_ToContiguous(self->instance->host_memory->ptr, &view, view.len, 'C');
 
-    VkCommandBuffer cmd = begin_commands(self->instance);
+    VkCommandBuffer command_buffer = begin_commands(self->instance);
 
     VkBufferCopy copy = {0, 0, (VkDeviceSize)view.len};
-    vkCmdCopyBuffer(cmd, self->instance->host_buffer->buffer, self->buffer, 1, &copy);
+    vkCmdCopyBuffer(command_buffer, self->instance->host_buffer->buffer, self->buffer, 1, &copy);
 
-    end_commands(self->instance);
+    end_commands(self->instance, command_buffer);
     PyBuffer_Release(&view);
+    return 0;
 }
 
-Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {"host_memory", "device_memory", NULL};
+struct new_memory_args {
+    Instance * instance;
+    VkBool32 host;
+};
 
-    VkDeviceSize host_memory_size = 0;
-    VkDeviceSize device_memory_size = 0;
+Memory * new_memory(new_memory_args args) {
+    Memory * res = PyObject_New(Memory, Memory_type);
+    res->instance = args.instance;
+    res->memory = NULL;
+    res->offset = 0;
+    res->size = 0;
+    res->host = args.host;
+    res->ptr = NULL;
+    PyList_Append(args.instance->memory_list, (PyObject *)res);
+    return res;
+}
+
+struct new_buffer_args {
+    Instance * instance;
+    Memory * memory;
+    VkDeviceSize size;
+    VkBufferUsageFlags usage;
+};
+
+Buffer * new_buffer(new_buffer_args args) {
+    Buffer * res = PyObject_New(Buffer, Buffer_type);
+    res->instance = args.instance;
+    res->memory = args.memory;
+    res->offset = 0;
+    res->size = args.size;
+    res->usage = args.usage;
+    res->buffer = NULL;
+
+    VkBufferCreateInfo buffer_create_info = {
+        VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        NULL,
+        0,
+        args.size,
+        args.usage,
+        VK_SHARING_MODE_EXCLUSIVE,
+        0,
+        NULL,
+    };
+
+    vkCreateBuffer(args.instance->device, &buffer_create_info, NULL, &res->buffer);
+
+    VkMemoryRequirements requirements = {};
+    vkGetBufferMemoryRequirements(args.instance->device, res->buffer, &requirements);
+    res->offset = take_memory(args.memory, requirements);
+
+    PyList_Append(args.instance->buffer_list, (PyObject *)res);
+    return res;
+}
+
+struct new_image_args {
+    Instance * instance;
+    Memory * memory;
+    VkDeviceSize size;
+    VkImageUsageFlags usage;
+    VkExtent3D extent;
+    uint32_t samples;
+    uint32_t levels;
+    uint32_t layers;
+    ImageMode mode;
+    VkFormat format;
+};
+
+Image * new_image(new_image_args args) {
+    Image * res = PyObject_New(Image, Image_type);
+    res->instance = args.instance;
+    res->memory = args.memory;
+    res->offset = 0;
+    res->size = args.size;
+    res->extent = args.extent;
+    res->samples = args.samples;
+    res->levels = args.levels;
+    res->layers = args.layers;
+    res->mode = args.mode;
+    res->format = args.format;
+    res->image = NULL;
+
+    VkImageCreateInfo image_create_info = {
+        VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        NULL,
+        0,
+        VK_IMAGE_TYPE_2D,
+        args.format,
+        args.extent,
+        args.levels,
+        args.layers,
+        (VkSampleCountFlagBits)args.samples,
+        VK_IMAGE_TILING_OPTIMAL,
+        args.usage,
+        VK_SHARING_MODE_EXCLUSIVE,
+        0,
+        NULL,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+
+    vkCreateImage(args.instance->device, &image_create_info, NULL, &res->image);
+
+    VkMemoryRequirements requirements = {};
+    vkGetImageMemoryRequirements(args.instance->device, res->image, &requirements);
+    res->offset = take_memory(args.memory, requirements);
+
+    PyList_Append(args.instance->image_list, (PyObject *)res);
+    return res;
+}
+
+Memory * get_memory(Instance * instance, PyObject * memory) {
+    if (memory == Py_None) {
+        return new_memory({instance, false});
+    }
+    if (PyObject_Type(memory) == (PyObject *)Memory_type) {
+        return (Memory *)memory;
+    }
+    PyErr_Format(PyExc_TypeError, "memory");
+    return NULL;
+}
+
+Format get_format(PyObject * name) {
+    const char * s = PyUnicode_AsUTF8(name);
+    if (!strcmp(s, "1f")) return {VK_FORMAT_R32_SFLOAT, 4, PACK_FLOAT, 1};
+    if (!strcmp(s, "2f")) return {VK_FORMAT_R32G32_SFLOAT, 8, PACK_FLOAT, 2};
+    if (!strcmp(s, "3f")) return {VK_FORMAT_R32G32B32_SFLOAT, 12, PACK_FLOAT, 3};
+    if (!strcmp(s, "4f")) return {VK_FORMAT_R32G32B32A32_SFLOAT, 16, PACK_FLOAT, 4};
+    if (!strcmp(s, "1i")) return {VK_FORMAT_R32_SINT, 4, PACK_INT, 1};
+    if (!strcmp(s, "2i")) return {VK_FORMAT_R32G32_SINT, 8, PACK_INT, 2};
+    if (!strcmp(s, "3i")) return {VK_FORMAT_R32G32B32_SINT, 12, PACK_INT, 3};
+    if (!strcmp(s, "4i")) return {VK_FORMAT_R32G32B32A32_SINT, 16, PACK_INT, 4};
+    if (!strcmp(s, "1b")) return {VK_FORMAT_R8_UNORM, 1, PACK_BYTE, 1};
+    if (!strcmp(s, "2b")) return {VK_FORMAT_R8G8_UNORM, 2, PACK_BYTE, 2};
+    if (!strcmp(s, "3b")) return {VK_FORMAT_R8G8B8_UNORM, 3, PACK_BYTE, 3};
+    if (!strcmp(s, "4b")) return {VK_FORMAT_B8G8R8A8_UNORM, 4, PACK_BYTE, 4};
+    if (!strcmp(s, "1x")) return {VK_FORMAT_UNDEFINED, 1, PACK_PAD, 1};
+    if (!strcmp(s, "2x")) return {VK_FORMAT_UNDEFINED, 2, PACK_PAD, 2};
+    if (!strcmp(s, "3x")) return {VK_FORMAT_UNDEFINED, 3, PACK_PAD, 3};
+    if (!strcmp(s, "4x")) return {VK_FORMAT_UNDEFINED, 4, PACK_PAD, 4};
+    if (!strcmp(s, "8x")) return {VK_FORMAT_UNDEFINED, 8, PACK_PAD, 8};
+    PyErr_Format(PyExc_ValueError, "format");
+    return {};
+}
+
+VkCullModeFlags get_cull_mode(PyObject * name) {
+    if (name == Py_None) {
+        return VK_CULL_MODE_NONE;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "front")) {
+        return VK_CULL_MODE_FRONT_BIT;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "back")) {
+        return VK_CULL_MODE_BACK_BIT;
+    }
+    return VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
+}
+
+VkFrontFace get_front_face(PyObject * name) {
+    if (!PyUnicode_CompareWithASCIIString(name, "counter_clockwise")) {
+        return VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "clockwise")) {
+        return VK_FRONT_FACE_CLOCKWISE;
+    }
+    return VK_FRONT_FACE_MAX_ENUM;
+}
+
+VkPrimitiveTopology get_topology(PyObject * name) {
+    if (!PyUnicode_CompareWithASCIIString(name, "points")) {
+        return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "lines")) {
+        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "line_strip")) {
+        return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "triangles")) {
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "triangle_strip")) {
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "triangle_fan")) {
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
+    }
+    PyErr_Format(PyExc_ValueError, "topology");
+    return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
+}
+
+VkFilter get_filter(PyObject * name) {
+    if (!PyUnicode_CompareWithASCIIString(name, "nearest")) {
+        return VK_FILTER_NEAREST;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "linear")) {
+        return VK_FILTER_LINEAR;
+    }
+    PyErr_Format(PyExc_ValueError, "filter");
+    return VK_FILTER_MAX_ENUM;
+}
+
+VkSamplerMipmapMode get_mipmap_filter(PyObject * name) {
+    if (!PyUnicode_CompareWithASCIIString(name, "nearest")) {
+        return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "linear")) {
+        return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    }
+    PyErr_Format(PyExc_ValueError, "filter");
+    return VK_SAMPLER_MIPMAP_MODE_MAX_ENUM;
+}
+
+VkSamplerAddressMode get_address_mode(PyObject * name) {
+    if (!PyUnicode_CompareWithASCIIString(name, "repeat")) {
+        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "mirrored_repeat")) {
+        return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "clamp_to_edge")) {
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "clamp_to_border")) {
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "mirror_clamp_to_edge")) {
+        return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+    }
+    PyErr_Format(PyExc_ValueError, "address_mode");
+    return VK_SAMPLER_ADDRESS_MODE_MAX_ENUM;
+}
+
+ImageMode get_image_mode(PyObject * name) {
+    if (!PyUnicode_CompareWithASCIIString(name, "texture")) {
+        return IMG_TEXTURE;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "output")) {
+        return IMG_OUTPUT;
+    }
+    return IMG_PROTECTED;
+}
+
+VkBorderColor get_border_color(PyObject * name, bool is_float) {
+    if (!PyUnicode_CompareWithASCIIString(name, "transparent")) {
+        return is_float ? VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK : VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "black")) {
+        return is_float ? VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK : VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    }
+    if (!PyUnicode_CompareWithASCIIString(name, "white")) {
+        return is_float ? VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE : VK_BORDER_COLOR_INT_OPAQUE_WHITE;
+    }
+    PyErr_Format(PyExc_ValueError, "border_color");
+    return VK_BORDER_COLOR_MAX_ENUM;
+}
+
+struct build_mipmaps_args {
+    VkCommandBuffer cmd;
+    uint32_t width;
+    uint32_t height;
+    uint32_t levels;
+    uint32_t layers;
+    uint32_t image_count;
+    Image * image_array;
+};
+
+void build_mipmaps(build_mipmaps_args args) {
+    for (uint32_t level = 1; level < args.levels; ++level) {
+        uint32_t parent = level - 1;
+        VkImageBlit image_blit = {
+            {VK_IMAGE_ASPECT_COLOR_BIT, parent, 0, args.layers},
+            {{0, 0, 0}, {(int32_t)args.width >> parent, (int32_t)args.height >> parent, 1}},
+            {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, args.layers},
+            {{0, 0, 0}, {(int32_t)args.width >> level, (int32_t)args.height >> level, 1}},
+        };
+
+        for (uint32_t i = 0; i < args.image_count; ++i) {
+            vkCmdBlitImage(
+                args.cmd,
+                args.image_array[i].image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                args.image_array[i].image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1,
+                &image_blit,
+                VK_FILTER_LINEAR
+            );
+        }
+
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[64];
+
+        for (uint32_t i = 0; i < args.image_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                args.image_array[i].image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, level, 1, 0, args.layers},
+            };
+        }
+
+        vkCmdPipelineBarrier(
+            args.cmd,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+
+    if (args.levels > 1) {
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[128];
+
+        for (uint32_t i = 0; i < args.image_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                args.image_array[i].image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, args.levels - 1, 0, args.layers},
+            };
+
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                args.image_array[i].image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, args.levels - 1, 1, 0, args.layers},
+            };
+        }
+
+        vkCmdPipelineBarrier(
+            args.cmd,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+}
+
+void render(VkCommandBuffer cmd, Renderer * renderer) {
+    VkClearValue * clear_value_array = NULL;
+    uint32_t clear_value_count = retreive_array(renderer->clear_values, &clear_value_array);
+    VkFramebuffer * framebuffer_array = NULL;
+    retreive_array(renderer->framebuffers, &framebuffer_array);
+
+    for (uint32_t layer = 0; layer < renderer->layers; ++layer) {
+        VkRenderPassBeginInfo render_pass_begin_info = {
+            VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            NULL,
+            renderer->render_pass,
+            framebuffer_array[layer],
+            {{0, 0}, {renderer->width, renderer->height}},
+            clear_value_count,
+            clear_value_array,
+        };
+
+        vkCmdBeginRenderPass(cmd, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+        VkViewport viewport = {0.0f, 0.0f, (float)renderer->width, (float)renderer->height, 0.0f, 1.0f};
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissor = {{0, 0}, {renderer->width, renderer->height}};
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+        for (int i = 0; i < PyList_Size(renderer->pipeline_list); ++i) {
+            Pipeline * pipeline = (Pipeline *)PyList_GetItem(renderer->pipeline_list, i);
+
+            VkBuffer * vertex_buffer_array = NULL;
+            uint32_t vertex_buffer_count = retreive_array(pipeline->vertex_buffers, &vertex_buffer_array);
+            const VkDeviceSize vertex_buffer_offset_array[64] = {};
+
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+
+            if (vertex_buffer_count) {
+                vkCmdBindVertexBuffers(
+                    cmd,
+                    0,
+                    vertex_buffer_count,
+                    vertex_buffer_array,
+                    vertex_buffer_offset_array
+                );
+            }
+
+            if (pipeline->descriptor_set) {
+                vkCmdBindDescriptorSets(
+                    cmd,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    pipeline->pipeline_layout,
+                    0,
+                    1,
+                    &pipeline->descriptor_set,
+                    0,
+                    NULL
+                );
+            }
+
+            if (pipeline->index_buffer) {
+                vkCmdBindIndexBuffer(cmd, pipeline->index_buffer->buffer, 0, VK_INDEX_TYPE_UINT32);
+            }
+
+            vkCmdPushConstants(
+                cmd,
+                pipeline->pipeline_layout,
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                0,
+                4,
+                &layer
+            );
+
+            if (pipeline->indirect_count && pipeline->index_count) {
+                vkCmdDrawIndexedIndirect(cmd, pipeline->indirect_buffer->buffer, 0, pipeline->indirect_count, 20);
+            } else if (pipeline->indirect_count) {
+                vkCmdDrawIndirect(cmd, pipeline->indirect_buffer->buffer, 0, pipeline->indirect_count, 16);
+            } else if (pipeline->index_count) {
+                vkCmdDrawIndexed(cmd, pipeline->index_count, pipeline->instance_count, 0, 0, 0);
+            } else {
+                vkCmdDraw(cmd, pipeline->vertex_count, pipeline->instance_count, 0, 0);
+            }
+        }
+
+        vkCmdEndRenderPass(cmd);
+    }
+
+    if (renderer->levels > 1) {
+        Image * resolve_image_array = NULL;
+        uint32_t resolve_image_count = retreive_array(renderer->resolve_images, &resolve_image_array);
+
+        build_mipmaps({
+            cmd,
+            renderer->width,
+            renderer->height,
+            renderer->levels,
+            renderer->layers,
+            resolve_image_count,
+            resolve_image_array,
+        });
+    }
+}
+
+void end_commands_with_present(Instance * self, VkCommandBuffer cmd) {
+    if (self->presenter.surface_count) {
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[64];
+
+        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->presenter.image_array[i][self->presenter.index_array[i]],
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            };
+        }
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        vkCmdCopyImage(
+            cmd,
+            self->presenter.image_source_array[i],
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            self->presenter.image_array[i][self->presenter.index_array[i]],
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &self->presenter.image_copy_array[i]
+        );
+    }
+
+    if (self->presenter.surface_count) {
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[64];
+
+        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->presenter.image_array[i][self->presenter.index_array[i]],
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            };
+        }
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+
+    vkEndCommandBuffer(cmd);
+
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        vkAcquireNextImageKHR(
+            self->device,
+            self->presenter.swapchain_array[i],
+            UINT64_MAX,
+            self->presenter.semaphore_array[i],
+            NULL,
+            &self->presenter.index_array[i]
+        );
+    }
+
+    VkSubmitInfo submit_info = {
+        VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        NULL,
+        self->presenter.surface_count,
+        self->presenter.semaphore_array,
+        self->presenter.wait_stage_array,
+        1,
+        &cmd,
+        0,
+        NULL,
+    };
+
+    vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
+    vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
+    vkResetFences(self->device, 1, &self->fence);
+
+    if (self->presenter.surface_count) {
+        VkPresentInfoKHR present_info = {
+            VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            NULL,
+            0,
+            NULL,
+            self->presenter.surface_count,
+            self->presenter.swapchain_array,
+            self->presenter.index_array,
+            self->presenter.result_array,
+        };
+
+        vkQueuePresentKHR(self->queue, &present_info);
+
+        uint32_t idx = 0;
+        while (idx < self->presenter.surface_count) {
+            if (self->presenter.result_array[idx] == VK_ERROR_OUT_OF_DATE_KHR) {
+                vkDestroySemaphore(self->device, self->presenter.semaphore_array[idx], NULL);
+                vkDestroySwapchainKHR(self->device, self->presenter.swapchain_array[idx], NULL);
+                vkDestroySurfaceKHR(self->instance, self->presenter.surface_array[idx], NULL);
+                presenter_remove(&self->presenter, idx);
+                continue;
+            }
+            idx += 1;
+        }
+    }
+}
+
+Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kwargs) {
+    static char * keywords[] = {
+        "physical_device",
+        "host_memory",
+        "device_memory",
+        "staging_buffer",
+        "headless",
+        "application_name",
+        "application_version",
+        "engine_name",
+        "engine_version",
+        "layers",
+        NULL,
+    };
+
+    struct {
+        uint32_t physical_device = 0;
+        VkDeviceSize host_memory_size = 0;
+        VkDeviceSize device_memory_size = 0;
+        VkDeviceSize staging_buffer_size = 0;
+        const char * application_name = "application";
+        uint32_t application_version = 0;
+        const char * engine_name = "engine";
+        uint32_t engine_version = 0;
+        VkBool32 headless = false;
+        PyObject * layers = Py_None;
+    } args;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
-        args,
+        vargs,
         kwargs,
-        "|$kk",
+        "|$IkkkpsIsIO",
         keywords,
-        &host_memory_size,
-        &device_memory_size
+        &args.physical_device,
+        &args.host_memory_size,
+        &args.device_memory_size,
+        &args.staging_buffer_size,
+        &args.application_name,
+        &args.application_version,
+        &args.engine_name,
+        &args.engine_version,
+        &args.headless,
+        &args.layers
     );
 
     if (!args_ok) {
         return NULL;
     }
 
-    if (host_memory_size < 64 * 1024) {
-        host_memory_size = 64 * 1024;
+    if (args.host_memory_size < 64 * 1024) {
+        args.host_memory_size = 64 * 1024;
+    }
+
+    if (args.layers == Py_None) {
+        args.layers = empty_list;
     }
 
     Instance * res = PyObject_New(Instance, Instance_type);
 
-    res->context_list = PyList_New(0);
+    res->instance = NULL;
+    res->physical_device = NULL;
+    res->device = NULL;
+    res->queue = NULL;
+    res->command_pool = NULL;
+    res->command_buffer = NULL;
+    res->fence = NULL;
+
+    res->presenter = {};
+
+    res->renderer_list = PyList_New(0);
     res->memory_list = PyList_New(0);
     res->buffer_list = PyList_New(0);
     res->image_list = PyList_New(0);
@@ -473,31 +1061,62 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwa
     VkApplicationInfo application_info = {
         VK_STRUCTURE_TYPE_APPLICATION_INFO,
         NULL,
-        "application",
-        0,
-        "engine",
-        0,
+        args.application_name,
+        args.application_version,
+        args.engine_name,
+        args.engine_version,
         VK_API_VERSION_1_0,
     };
 
-    const char * instance_layer_array[] = {"VK_LAYER_KHRONOS_validation"};
-    const char * instance_extension_array[] = {"VK_EXT_debug_utils"};
+    uint32_t instance_layer_count = 0;
+    uint32_t instance_extension_count = 0;
+    uint32_t device_extension_count = 0;
+
+    const char * instance_layer_array[64];
+    const char * instance_extension_array[8];
+    const char * device_extension_array[8];
+
+    for (uint32_t i = 0; i < PyList_Size(args.layers); ++i) {
+        instance_layer_array[instance_layer_count++] = PyUnicode_AsUTF8(PyList_GetItem(args.layers, i));
+    }
+
+    #ifndef BUILD_HEADLESS
+    if (!args.headless) {
+        instance_extension_array[instance_extension_count++] = SURFACE_EXTENSION;
+        instance_extension_array[instance_extension_count++] = "VK_KHR_surface";
+        device_extension_array[device_extension_count++] = "VK_KHR_swapchain";
+    }
+    #endif
 
     VkInstanceCreateInfo instance_create_info = {
         VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         NULL,
         0,
         &application_info,
-        1,
+        instance_layer_count,
         instance_layer_array,
-        1,
+        instance_extension_count,
         instance_extension_array,
     };
 
+    res->instance = NULL;
     vkCreateInstance(&instance_create_info, NULL, &res->instance);
 
-    uint32_t num_physical_devices = 1;
-    vkEnumeratePhysicalDevices(res->instance, &num_physical_devices, &res->physical_device);
+    if (!res->instance) {
+        PyErr_Format(PyExc_RuntimeError, "cannot create instance");
+        return NULL;
+    }
+
+    uint32_t physical_device_count = 0;
+    VkPhysicalDevice physical_device_array[64] = {};
+    vkEnumeratePhysicalDevices(res->instance, &physical_device_count, NULL);
+    vkEnumeratePhysicalDevices(res->instance, &physical_device_count, physical_device_array);
+    res->physical_device = physical_device_array[args.physical_device];
+
+    if (!res->physical_device) {
+        PyErr_Format(PyExc_RuntimeError, "physical device not found");
+        return NULL;
+    }
 
     VkPhysicalDeviceMemoryProperties device_memory_properties = {};
     vkGetPhysicalDeviceMemoryProperties(res->physical_device, &device_memory_properties);
@@ -505,6 +1124,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwa
     VkPhysicalDeviceFeatures supported_features = {};
     vkGetPhysicalDeviceFeatures(res->physical_device, &supported_features);
 
+    res->host_memory_type_index = 0;
     for (uint32_t i = 0; i < device_memory_properties.memoryTypeCount; ++i) {
         VkMemoryPropertyFlags flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         if ((device_memory_properties.memoryTypes[i].propertyFlags & flags) == flags) {
@@ -513,6 +1133,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwa
         }
     }
 
+    res->device_memory_type_index = 0;
     for (uint32_t i = 0; i < device_memory_properties.memoryTypeCount; ++i) {
         VkMemoryPropertyFlags flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
         if ((device_memory_properties.memoryTypes[i].propertyFlags & flags) == flags) {
@@ -521,7 +1142,28 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwa
         }
     }
 
+    VkFormat depth_formats[] = {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
+    for (uint32_t i = 0; i < 3; ++i) {
+        VkFormatProperties format_properties = {};
+        vkGetPhysicalDeviceFormatProperties(res->physical_device, depth_formats[i], &format_properties);
+        if (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            res->depth_format = depth_formats[i];
+        }
+    }
+
+    uint32_t queue_family_properties_count = 0;
+    VkQueueFamilyProperties queue_family_properties_array[64];
+    vkGetPhysicalDeviceQueueFamilyProperties(res->physical_device, &queue_family_properties_count, NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(res->physical_device, &queue_family_properties_count, queue_family_properties_array);
+
     res->queue_family_index = 0;
+    for (uint32_t i = 0; i < queue_family_properties_count; ++i) {
+        if (queue_family_properties_array[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            res->queue_family_index = i;
+            break;
+        }
+    }
+
     float queue_priority = 1.0f;
 
     VkDeviceQueueCreateInfo device_queue_create_info = {
@@ -535,6 +1177,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwa
 
     VkPhysicalDeviceFeatures physical_device_features = {};
     physical_device_features.multiDrawIndirect = supported_features.multiDrawIndirect;
+    physical_device_features.samplerAnisotropy = supported_features.samplerAnisotropy;
 
     VkDeviceCreateInfo device_create_info = {
         VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -544,13 +1187,23 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwa
         &device_queue_create_info,
         0,
         NULL,
-        0,
-        NULL,
+        device_extension_count,
+        device_extension_array,
         &physical_device_features,
     };
 
+    res->device = NULL;
     vkCreateDevice(res->physical_device, &device_create_info, NULL, &res->device);
+
+    if (!res->device) {
+        PyErr_Format(PyExc_RuntimeError, "cannot create device");
+        return NULL;
+    }
+
     vkGetDeviceQueue(res->device, res->queue_family_index, 0, &res->queue);
+
+    VkFenceCreateInfo fence_create_info = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, NULL, 0};
+    vkCreateFence(res->device, &fence_create_info, NULL, &res->fence);
 
     VkCommandPoolCreateInfo command_pool_create_info = {
         VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -571,261 +1224,631 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * args, PyObject * kwa
 
     vkAllocateCommandBuffers(res->device, &command_buffer_allocate_info, &res->command_buffer);
 
-    VkFenceCreateInfo fence_create_info = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, NULL, 0};
-    vkCreateFence(res->device, &fence_create_info, NULL, &res->fence);
+    res->device_memory = NULL;
+    if (args.device_memory_size) {
+        res->device_memory = new_memory({res, false});
+    }
 
-    res->host_memory = new_memory(res, true);
-    res->host_buffer = new_buffer(res, host_memory_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, res->host_memory);
+    res->host_memory = new_memory({res, true});
+    res->host_buffer = new_buffer({
+        res,
+        res->host_memory,
+        args.host_memory_size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    });
+
     allocate_memory(res->host_memory);
     bind_buffer(res->host_buffer);
 
-    res->device_memory = NULL;
+    res->staging_memory = NULL;
+    res->staging_buffer = NULL;
+    res->staging_memoryview = NULL;
 
-    if (device_memory_size) {
-        res->device_memory = new_memory(res, false);
-        allocate_memory(res->device_memory, device_memory_size);
+    if (args.staging_buffer_size) {
+        res->staging_memory = new_memory({res, true});
+        res->staging_buffer = new_buffer({
+            res,
+            res->staging_memory,
+            args.staging_buffer_size,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        });
+
+        allocate_memory(res->staging_memory);
+        bind_buffer(res->staging_buffer);
+
+        res->staging_memoryview = PyMemoryView_FromMemory((char *)res->staging_memory->ptr, args.staging_buffer_size, PyBUF_WRITE);
     }
 
     return res;
 }
 
-Context * Instance_meth_context(Instance * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {"size", "format", "samples", "depth", "render_to_image", "memory", NULL};
+Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs) {
+    static char * keywords[] = {
+        "size",
+        "format",
+        "levels",
+        "layers",
+        "mode",
+        "memory",
+        NULL,
+    };
 
-    uint32_t width;
-    uint32_t height;
-    PyObject * framebuffer_format = default_framebuffer_format;
-    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_4_BIT;
-    VkBool32 has_depth = true;
-    VkBool32 render_to_image = false;
-    Memory * memory = NULL;
+    struct {
+        uint32_t width;
+        uint32_t height;
+        PyObject * format = default_format;
+        uint32_t levels = 1;
+        uint32_t layers = 1;
+        PyObject * mode = texture_str;
+        PyObject * memory = Py_None;
+    } args;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
-        args,
+        vargs,
         kwargs,
-        "(II)|OIkppO!",
+        "(II)|O$IIOO",
         keywords,
-        &width,
-        &height,
-        &framebuffer_format,
-        &samples,
-        &has_depth,
-        &render_to_image,
-        Memory_type,
-        &memory
+        &args.width,
+        &args.height,
+        &args.format,
+        &args.levels,
+        &args.layers,
+        &args.mode,
+        &args.memory
     );
 
     if (!args_ok) {
         return NULL;
     }
 
-    if (!memory) {
-        memory = new_memory(self, false);
-    }
+    Memory * memory = get_memory(self, args.memory);
+    ImageMode image_mode = get_image_mode(args.mode);
+    Format format = get_format(args.format);
 
-    Context * res = PyObject_New(Context, Context_type);
-
-    res->instance = self;
-    res->render_to_image = render_to_image;
-    res->renderer_list = PyList_New(0);
-
-    res->uniform_buffer = new_buffer(self, 64 * 1024, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, memory);
-
-    VkBool32 has_color = true;
-    VkBool32 has_resolve = has_color && samples != VK_SAMPLE_COUNT_1_BIT;
-    VkFormat depth_format = VK_FORMAT_D24_UNORM_S8_UINT;
-
-    VkImageUsageFlags output_image_usage = (render_to_image ? VK_IMAGE_USAGE_SAMPLED_BIT : VK_IMAGE_USAGE_TRANSFER_SRC_BIT) | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    VkImageLayout final_layout = render_to_image ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    VkExtent3D image_extent = {width, height, 1};
-    VkExtent3D zero_extent = {};
-
-    uint32_t pixel_size = 0;
-    PyObject * format_list = PyUnicode_Split(framebuffer_format, NULL, -1);
-    if (!format_list) {
+    if (args.levels > 1 && image_mode == IMG_OUTPUT) {
+        PyErr_Format(PyExc_ValueError, "invalid mode");
         return NULL;
     }
 
-    res->color_attachment_count = (uint32_t)PyList_Size(format_list);
-    res->color_attachment_array = (ColorAttachment *)PyMem_Malloc(res->color_attachment_count * sizeof(ColorAttachment));
-
-    for (uint32_t i = 0; i < res->color_attachment_count; ++i) {
-        PyObject * obj = PyDict_GetItem(format_dict, PyList_GetItem(format_list, i));
-        VkFormat format = (VkFormat)PyLong_AsUnsignedLong(PyTuple_GetItem(obj, 0));
-        uint32_t size = PyLong_AsUnsignedLong(PyTuple_GetItem(obj, 1));
-
-        res->color_attachment_array[i].size = size;
-        res->color_attachment_array[i].pack_type = (PackType)PyLong_AsUnsignedLong(PyTuple_GetItem(obj, 2));
-        res->color_attachment_array[i].pack_count = PyLong_AsUnsignedLong(PyTuple_GetItem(obj, 3));
-
-        Image * color_image = new_image(
-            self,
-            width * height * samples * size,
-            {width, height, 1},
-            format,
-            has_resolve ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : output_image_usage,
-            samples,
-            memory
-        );
-
-        res->color_attachment_array[i].image = color_image;
-        res->color_attachment_array[i].resolve = color_image;
-
-        if (has_resolve) {
-            res->color_attachment_array[i].resolve = new_image(
-                self,
-                width * height * size,
-                {width, height, has_resolve},
-                format,
-                output_image_usage,
-                VK_SAMPLE_COUNT_1_BIT,
-                memory
-            );
-        }
-
-        pixel_size += size;
+    VkImageUsageFlags image_usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if (image_mode == IMG_TEXTURE) {
+        image_usage = VK_IMAGE_USAGE_SAMPLED_BIT;
     }
 
-    Py_DECREF(format_list);
-
-    res->depth_image = new_image(
+    Image * res = new_image({
         self,
-        width * height * samples * 4,
-        {width, height, has_depth},
-        depth_format,
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        samples,
-        memory
+        memory,
+        args.width * args.height * args.layers * format.size,
+        image_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        {args.width, args.height, 1},
+        1,
+        args.levels,
+        args.layers,
+        image_mode,
+        format.format,
+    });
+
+    allocate_memory(memory);
+    bind_image(res);
+
+    VkCommandBuffer command_buffer = begin_commands(self);
+
+    VkImageLayout image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    if (image_mode == IMG_TEXTURE) {
+        image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    VkImageMemoryBarrier image_barrier_transfer = {
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        NULL,
+        0,
+        0,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        image_layout,
+        VK_QUEUE_FAMILY_IGNORED,
+        VK_QUEUE_FAMILY_IGNORED,
+        res->image,
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, args.layers},
+    };
+
+    vkCmdPipelineBarrier(
+        command_buffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0,
+        NULL,
+        0,
+        NULL,
+        1,
+        &image_barrier_transfer
     );
+
+    end_commands(self, command_buffer);
+
+    PyList_Append(self->image_list, (PyObject *)res);
+    return res;
+}
+
+Sampler * Instance_meth_sampler(Instance * self, PyObject * vargs, PyObject * kwargs) {
+    static char * keywords[] = {
+        "image",
+        "min_filter",
+        "mag_filter",
+        "mipmap_filter",
+        "address_mode_x",
+        "address_mode_y",
+        "address_mode_z",
+        "normalized",
+        "anisotropy",
+        "max_anisotrpoy",
+        "min_lod",
+        "max_lod",
+        "lod_bias",
+        "border_color",
+        "swizzle",
+        "layer",
+        "layers",
+        NULL,
+    };
+
+    struct {
+        Image * image;
+        PyObject * min_filter = default_filter;
+        PyObject * mag_filter = default_filter;
+        PyObject * mipmap_filter = default_filter;
+        PyObject * address_mode_x = default_address_mode;
+        PyObject * address_mode_y = default_address_mode;
+        PyObject * address_mode_z = default_address_mode;
+        VkBool32 normalized = true;
+        VkBool32 anisotropy = false;
+        float max_anisotrpoy = 1.0f;
+        float min_lod = 0.0f;
+        float max_lod = 1000.0f;
+        float lod_bias = 0.0f;
+        PyObject * border_color = default_border_color;
+        PyObject * swizzle = default_swizzle;
+        uint32_t layer = 0;
+        uint32_t layers = 1;
+    } args;
+
+    int args_ok = PyArg_ParseTupleAndKeywords(
+        vargs,
+        kwargs,
+        "O!|$OOOOOOppffffOOII",
+        keywords,
+        Image_type,
+        &args.image,
+        &args.address_mode_x,
+        &args.address_mode_y,
+        &args.address_mode_z,
+        &args.min_filter,
+        &args.mag_filter,
+        &args.mipmap_filter,
+        &args.normalized,
+        &args.anisotropy,
+        &args.max_anisotrpoy,
+        &args.min_lod,
+        &args.max_lod,
+        &args.lod_bias,
+        &args.border_color,
+        &args.swizzle,
+        &args.layer,
+        &args.layers
+    );
+
+    if (!args_ok) {
+        return NULL;
+    }
+
+    Sampler * res = PyObject_New(Sampler, Sampler_type);
+    res->image = args.image;
+    res->info = {
+        VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        NULL,
+        0,
+        get_filter(args.min_filter),
+        get_filter(args.mag_filter),
+        get_mipmap_filter(args.mipmap_filter),
+        get_address_mode(args.address_mode_x),
+        get_address_mode(args.address_mode_y),
+        get_address_mode(args.address_mode_z),
+        args.lod_bias,
+        args.anisotropy,
+        args.max_anisotrpoy,
+        false,
+        VK_COMPARE_OP_NEVER,
+        args.min_lod,
+        args.max_lod,
+        get_border_color(args.border_color, true),
+        !args.normalized,
+    };
+    res->subresource_range = {
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        0,
+        1,
+        args.layer,
+        args.layers,
+    };
+    res->component_mapping = {
+        VK_COMPONENT_SWIZZLE_R,
+        VK_COMPONENT_SWIZZLE_G,
+        VK_COMPONENT_SWIZZLE_B,
+        VK_COMPONENT_SWIZZLE_A,
+    };
+    return res;
+}
+
+#ifndef BUILD_HEADLESS
+PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * kwargs) {
+    static char * keywords[] = {
+        "window",
+        "image",
+        NULL
+    };
+
+    struct {
+        PyObject * window;
+        Image * image;
+    } args;
+
+    int args_ok = PyArg_ParseTupleAndKeywords(
+        vargs,
+        kwargs,
+        "O|O!",
+        keywords,
+        &args.window,
+        Image_type,
+        &args.image
+    );
+
+    if (!args_ok) {
+        return NULL;
+    }
+
+    #ifdef BUILD_WINDOWS
+    HWND hwnd = (HWND)PyLong_AsVoidPtr(args.window);
+
+    VkWin32SurfaceCreateInfoKHR surface_create_info = {
+        VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+        NULL,
+        0,
+        NULL,
+        hwnd,
+    };
+
+    VkSurfaceKHR surface = NULL;
+    vkCreateWin32SurfaceKHR(self->instance, &surface_create_info, NULL, &surface);
+    #endif
+
+    #ifdef BUILD_LINUX
+    Window wnd = (Window)PyLong_AsUnsignedLong(args.window);
+
+    VkXlibSurfaceCreateInfoKHR surface_create_info = {
+        VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+        NULL,
+        0,
+        NULL,
+        wnd,
+    };
+
+    VkSurfaceKHR surface = NULL;
+    vkCreateXlibSurfaceKHR(self->instance, &surface_create_info, NULL, &surface);
+    #endif
+
+    #ifdef BUILD_DARWIN
+    CAMetalLayer * layer = (CAMetalLayer *)PyLong_AsVoidPtr(args.window);
+
+    VkMetalSurfaceCreateInfoEXT surface_create_info = {
+        VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+        NULL,
+        0,
+        layer,
+    };
+
+    VkSurfaceKHR surface = NULL;
+    vkCreateMetalSurfaceEXT(self->instance, &surface_create_info, NULL, &surface);
+    #endif
+
+    VkBool32 present_support = false;
+    vkGetPhysicalDeviceSurfaceSupportKHR(self->physical_device, self->queue_family_index, surface, &present_support);
+
+    uint32_t num_formats = 1;
+    VkSurfaceFormatKHR surface_format = {};
+    VkSurfaceCapabilitiesKHR surface_capabilities = {};
+    vkGetPhysicalDeviceSurfaceFormatsKHR(self->physical_device, surface, &num_formats, &surface_format);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(self->physical_device, surface, &surface_capabilities);
+
+    VkSwapchainCreateInfoKHR swapchain_create_info = {
+        VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        NULL,
+        0,
+        surface,
+        surface_capabilities.minImageCount,
+        args.image->format,
+        surface_format.colorSpace,
+        surface_capabilities.currentExtent,
+        1,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        VK_SHARING_MODE_EXCLUSIVE,
+        0,
+        NULL,
+        surface_capabilities.currentTransform,
+        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        VK_PRESENT_MODE_FIFO_KHR,
+        true,
+        NULL,
+    };
+
+    VkSwapchainKHR swapchain = NULL;
+    vkCreateSwapchainKHR(self->device, &swapchain_create_info, NULL, &swapchain);
+
+    VkSemaphore semaphore = NULL;
+    VkSemaphoreCreateInfo semaphore_create_info = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, NULL, 0};
+    vkCreateSemaphore(self->device, &semaphore_create_info, NULL, &semaphore);
+
+    uint32_t swapchain_image_count = 0;
+    vkGetSwapchainImagesKHR(self->device, swapchain, &swapchain_image_count, NULL);
+    VkImage * swapchain_image_array = (VkImage *)PyMem_Malloc(sizeof(VkImage) * swapchain_image_count);
+    vkGetSwapchainImagesKHR(self->device, swapchain, &swapchain_image_count, swapchain_image_array);
+
+    uint32_t idx = self->presenter.surface_count++;
+
+    presenter_resize(&self->presenter);
+
+    self->presenter.surface_array[idx] = surface;
+    self->presenter.swapchain_array[idx] = swapchain;
+    self->presenter.semaphore_array[idx] = semaphore;
+    self->presenter.image_source_array[idx] = args.image->image;
+    self->presenter.image_count_array[idx] = swapchain_image_count;
+    self->presenter.image_array[idx] = swapchain_image_array;
+    self->presenter.wait_stage_array[idx] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    self->presenter.result_array[idx] = VK_SUCCESS;
+    self->presenter.index_array[idx] = 0;
+
+    self->presenter.image_copy_array[idx] = {
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        {0, 0, 0},
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        {0, 0, 0},
+        args.image->extent,
+    };
+
+    Py_RETURN_NONE;
+}
+#endif
+
+Renderer * Instance_meth_renderer(Instance * self, PyObject * vargs, PyObject * kwargs) {
+    static char * keywords[] = {
+        "size",
+        "format",
+        "samples",
+        "levels",
+        "layers",
+        "depth",
+        "uniform_buffer",
+        "mode",
+        "memory",
+        NULL
+    };
+
+    struct {
+        uint32_t width;
+        uint32_t height;
+        PyObject * format = default_format;
+        uint32_t samples = 4;
+        uint32_t levels = 1;
+        uint32_t layers = 1;
+        VkBool32 depth = true;
+        VkBool32 uniform_buffer = true;
+        PyObject * mode = output_str;
+        PyObject * memory = Py_None;
+    } args;
+
+    int args_ok = PyArg_ParseTupleAndKeywords(
+        vargs,
+        kwargs,
+        "(II)|O!$IIIppOO",
+        keywords,
+        &args.width,
+        &args.height,
+        &PyUnicode_Type,
+        &args.format,
+        &args.samples,
+        &args.levels,
+        &args.layers,
+        &args.depth,
+        &args.uniform_buffer,
+        &args.mode,
+        &args.memory
+    );
+
+    if (!args_ok) {
+        return NULL;
+    }
+
+    Memory * memory = get_memory(self, args.memory);
+    PyObject * format_list = PyUnicode_Split(args.format, NULL, -1);
+    uint32_t output_count = (uint32_t)PyList_Size(format_list);
+    ImageMode image_mode = get_image_mode(args.mode);
+
+    VkImageUsageFlags image_usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if (image_mode == IMG_TEXTURE) {
+        image_usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+    Renderer * res = PyObject_New(Renderer, Renderer_type);
+
+    res->instance = self;
+    res->width = args.width;
+    res->height = args.height;
+    res->samples = args.samples;
+    res->levels = args.levels;
+    res->layers = args.layers;
+    res->depth = args.depth;
+
+    res->pipeline_list = PyList_New(0);
+
+    res->uniform_buffer = NULL;
+    if (args.uniform_buffer) {
+        res->uniform_buffer = new_buffer({
+            self,
+            memory,
+            64 * 1024,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        });
+    }
+
+    Image * depth_image = NULL;
+    Image * color_image_array[64];
+    Image * resolve_image_array[64];
+
+    if (args.depth) {
+        depth_image = new_image({
+            self,
+            memory,
+            0,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            {args.width, args.height, 1},
+            args.samples,
+            1,
+            args.layers,
+            IMG_PROTECTED,
+            self->depth_format,
+        });
+    }
+
+    if (args.samples) {
+        for (uint32_t i = 0; i < output_count; ++i) {
+            Format format = get_format(PyList_GetItem(format_list, i));
+            color_image_array[i] = new_image({
+                self,
+                memory,
+                0,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                {args.width, args.height, 1},
+                args.samples,
+                1,
+                args.layers,
+                IMG_PROTECTED,
+                format.format,
+            });
+        }
+    }
+
+    for (uint32_t i = 0; i < output_count; ++i) {
+        Format format = get_format(PyList_GetItem(format_list, i));
+        resolve_image_array[i] = new_image({
+            self,
+            memory,
+            args.width * args.height * args.layers * format.size,
+            image_usage | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            {args.width, args.height, 1},
+            VK_SAMPLE_COUNT_1_BIT,
+            args.levels,
+            args.layers,
+            image_mode,
+            format.format,
+        });
+    }
 
     allocate_memory(memory);
 
-    bind_buffer(res->uniform_buffer);
+    if (args.uniform_buffer) {
+        bind_buffer(res->uniform_buffer);
+    }
 
-    for (uint32_t i = 0; i < res->color_attachment_count; ++i) {
-        bind_image(res->color_attachment_array[i].image);
-        if (has_resolve) {
-            bind_image(res->color_attachment_array[i].resolve);
+    if (args.depth) {
+        bind_image(depth_image);
+    }
+
+    if (args.samples) {
+        for (uint32_t i = 0; i < output_count; ++i) {
+            bind_image(color_image_array[i]);
         }
     }
 
-    bind_image(res->depth_image);
-
-    VkAttachmentReference depth_attachment_reference;
-    VkAttachmentReference color_attachment_reference_array[64];
-    VkAttachmentReference resolve_attachment_reference_array[64];
-    VkAttachmentDescription attachment_description_array[130];
-
-    res->attachment_count = 0;
-    uint32_t max_attachments = has_depth + (has_resolve + 1) * res->color_attachment_count;
-    res->attachment_image_view_array = (VkImageView *)PyMem_Malloc(max_attachments * sizeof(VkImageView));
-    res->clear_value_array = (VkClearValue *)PyMem_Malloc(max_attachments * sizeof(VkClearValue));
-    memset(res->clear_value_array, 0, max_attachments * sizeof(VkClearValue));
-    res->clear_value_array[0] = {1.0f, 0};
-
-    if (has_depth) {
-        VkImageViewCreateInfo depth_image_view_create_info = {
-            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            NULL,
-            0,
-            res->depth_image->image,
-            VK_IMAGE_VIEW_TYPE_2D,
-            depth_format,
-            {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
-            {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1},
-        };
-
-        VkImageView image_view = NULL;
-        vkCreateImageView(res->instance->device, &depth_image_view_create_info, NULL, &image_view);
-
-        res->attachment_image_view_array[res->attachment_count] = image_view;
-        attachment_description_array[res->attachment_count] = {
-            0,
-            res->depth_image->format,
-            res->depth_image->samples,
-            VK_ATTACHMENT_LOAD_OP_CLEAR,
-            VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-            VK_ATTACHMENT_STORE_OP_DONT_CARE,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        };
-        depth_attachment_reference = {
-            res->attachment_count,
-            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-        };
-
-        res->attachment_count += 1;
+    for (uint32_t i = 0; i < output_count; ++i) {
+        bind_image(resolve_image_array[i]);
     }
 
-    for (uint32_t i = 0; i < res->color_attachment_count; ++i) {
-        VkImageViewCreateInfo color_image_view_create_info = {
-            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            NULL,
-            0,
-            res->color_attachment_array[i].image->image,
-            VK_IMAGE_VIEW_TYPE_2D,
-            res->color_attachment_array[i].image->format,
-            {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-        };
+    VkImageLayout final_image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    if (image_mode == IMG_TEXTURE && args.levels == 1) {
+        final_image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
 
-        VkImageView image_view = NULL;
-        vkCreateImageView(res->instance->device, &color_image_view_create_info, NULL, &image_view);
+    uint32_t description_count = 0;
+    VkAttachmentDescription description_array[130];
 
-        res->attachment_image_view_array[res->attachment_count] = image_view;
-        attachment_description_array[res->attachment_count] = {
+    if (depth_image) {
+        description_array[description_count++] = {
             0,
-            res->color_attachment_array[i].image->format,
-            res->color_attachment_array[i].image->samples,
+            depth_image->format,
+            (VkSampleCountFlagBits)depth_image->samples,
             VK_ATTACHMENT_LOAD_OP_CLEAR,
-            VK_ATTACHMENT_STORE_OP_STORE,
+            VK_ATTACHMENT_STORE_OP_DONT_CARE,
             VK_ATTACHMENT_LOAD_OP_DONT_CARE,
             VK_ATTACHMENT_STORE_OP_DONT_CARE,
             VK_IMAGE_LAYOUT_UNDEFINED,
-            has_resolve ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : final_layout,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         };
-        color_attachment_reference_array[i] = {
-            res->attachment_count,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        };
+    }
 
-        res->attachment_count += 1;
-
-        if (has_resolve) {
-            VkImageViewCreateInfo color_image_resolve_view_create_info = {
-                VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                NULL,
+    if (args.samples) {
+        for (uint32_t i = 0; i < output_count; ++i) {
+            description_array[description_count++] = {
                 0,
-                res->color_attachment_array[i].resolve->image,
-                VK_IMAGE_VIEW_TYPE_2D,
-                res->color_attachment_array[i].resolve->format,
-                {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-            };
-
-            VkImageView image_view = NULL;
-            vkCreateImageView(res->instance->device, &color_image_resolve_view_create_info, NULL, &image_view);
-
-            res->attachment_image_view_array[res->attachment_count] = image_view;
-            attachment_description_array[res->attachment_count] = {
-                0,
-                res->color_attachment_array[i].resolve->format,
-                res->color_attachment_array[i].resolve->samples,
-                VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                color_image_array[i]->format,
+                (VkSampleCountFlagBits)color_image_array[i]->samples,
+                VK_ATTACHMENT_LOAD_OP_CLEAR,
                 VK_ATTACHMENT_STORE_OP_STORE,
                 VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 VK_IMAGE_LAYOUT_UNDEFINED,
-                final_layout,
-            };
-            resolve_attachment_reference_array[i] = {
-                res->attachment_count,
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             };
-
-            res->attachment_count += 1;
         }
+    }
+
+    for (uint32_t i = 0; i < output_count; ++i) {
+            description_array[description_count++] = {
+            0,
+            resolve_image_array[i]->format,
+            (VkSampleCountFlagBits)resolve_image_array[i]->samples,
+            VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            VK_ATTACHMENT_STORE_OP_STORE,
+            VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            final_image_layout,
+        };
+    }
+
+    uint32_t reference_count = 0;
+    VkAttachmentReference depth_reference;
+    VkAttachmentReference color_reference_array[64];
+    VkAttachmentReference resolve_reference_array[64];
+
+    if (args.depth) {
+        depth_reference = {
+            reference_count++,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+    }
+
+    if (args.format) {
+        for (uint32_t i = 0; i < output_count; ++i) {
+            color_reference_array[i] = {
+                reference_count++,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            };
+        }
+    }
+
+    for (uint32_t i = 0; i < output_count; ++i) {
+        resolve_reference_array[i] = {
+            reference_count++,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        };
     }
 
     VkSubpassDescription subpass_description = {
@@ -833,10 +1856,10 @@ Context * Instance_meth_context(Instance * self, PyObject * args, PyObject * kwa
         VK_PIPELINE_BIND_POINT_GRAPHICS,
         0,
         NULL,
-        res->color_attachment_count,
-        has_color ? color_attachment_reference_array : NULL,
-        has_resolve ? resolve_attachment_reference_array : NULL,
-        has_depth ? &depth_attachment_reference : NULL,
+        output_count,
+        color_reference_array,
+        args.samples ? resolve_reference_array : NULL,
+        args.depth ? &depth_reference : NULL,
         0,
         NULL,
     };
@@ -855,8 +1878,8 @@ Context * Instance_meth_context(Instance * self, PyObject * args, PyObject * kwa
         VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         NULL,
         0,
-        res->attachment_count,
-        attachment_description_array,
+        description_count,
+        description_array,
         1,
         &subpass_description,
         1,
@@ -865,254 +1888,102 @@ Context * Instance_meth_context(Instance * self, PyObject * args, PyObject * kwa
 
     vkCreateRenderPass(res->instance->device, &render_pass_create_info, NULL, &res->render_pass);
 
-    VkFramebufferCreateInfo framebuffer_create_info = {
-        VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        NULL,
-        0,
-        res->render_pass,
-        res->attachment_count,
-        res->attachment_image_view_array,
-        width,
-        height,
-        1,
-    };
+    VkFramebuffer framebuffer_array[64];
 
-    vkCreateFramebuffer(res->instance->device, &framebuffer_create_info, NULL, &res->framebuffer);
+    for (uint32_t k = 0; k < args.layers; ++k) {
+        uint32_t image_view_count = 0;
+        VkImageView image_view_array[130];
 
-    res->output = PyTuple_New(res->color_attachment_count);
-    for (uint32_t i = 0; i < res->color_attachment_count; ++i) {
-        PyObject * obj = (PyObject *)res->color_attachment_array[0].resolve;
-        PyTuple_SetItem(res->output, 0, obj);
-        Py_INCREF(obj);
+        if (args.depth) {
+            VkImageViewCreateInfo image_view_create_info = {
+                VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                NULL,
+                0,
+                depth_image->image,
+                VK_IMAGE_VIEW_TYPE_2D,
+                self->depth_format,
+                {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
+                {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, k, 1},
+            };
+
+            VkImageView image_view = NULL;
+            vkCreateImageView(res->instance->device, &image_view_create_info, NULL, &image_view);
+            image_view_array[image_view_count++] = image_view;
+        }
+
+        if (args.samples) {
+            for (uint32_t i = 0; i < output_count; ++i) {
+                VkImageViewCreateInfo image_view_create_info = {
+                    VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                    NULL,
+                    0,
+                    color_image_array[i]->image,
+                    VK_IMAGE_VIEW_TYPE_2D,
+                    color_image_array[i]->format,
+                    {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
+                    {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, k, 1},
+                };
+
+                VkImageView image_view = NULL;
+                vkCreateImageView(res->instance->device, &image_view_create_info, NULL, &image_view);
+                image_view_array[image_view_count++] = image_view;
+            }
+        }
+
+        for (uint32_t i = 0; i < output_count; ++i) {
+            VkImageViewCreateInfo image_view_create_info = {
+                VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                NULL,
+                0,
+                resolve_image_array[i]->image,
+                VK_IMAGE_VIEW_TYPE_2D,
+                resolve_image_array[i]->format,
+                {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, k, 1},
+            };
+
+            VkImageView image_view = NULL;
+            vkCreateImageView(res->instance->device, &image_view_create_info, NULL, &image_view);
+            image_view_array[image_view_count++] = image_view;
+        }
+
+        VkFramebufferCreateInfo framebuffer_create_info = {
+            VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            NULL,
+            0,
+            res->render_pass,
+            image_view_count,
+            image_view_array,
+            args.width,
+            args.height,
+            1,
+        };
+
+        vkCreateFramebuffer(res->instance->device, &framebuffer_create_info, NULL, &framebuffer_array[k]);
     }
 
-    res->width = width;
-    res->height = height;
-    res->samples = samples;
+    res->framebuffers = preserve_array(args.layers, framebuffer_array);
+    res->resolve_images = preserve_array(output_count, resolve_image_array);
 
-    if (!render_to_image) {
-        resize_buffer(self->host_buffer, width * height * pixel_size);
+    uint32_t clear_value_count = output_count + args.depth;
+    VkClearValue clear_value_array[65] = {};
+    if (args.depth) {
+        clear_value_array[0] = {1.0f, 0};
     }
 
-    PyList_Append(self->context_list, (PyObject *)res);
+    res->clear_values = preserve_array(clear_value_count, clear_value_array);
+
+    res->output = PyTuple_New(output_count);
+    for (uint32_t i = 0; i < output_count; ++i) {
+        PyTuple_SetItem(res->output, i, (PyObject *)resolve_image_array[i]);
+        Py_INCREF(resolve_image_array[i]);
+    }
+
+    PyList_Append(self->renderer_list, (PyObject *)res);
     return res;
 }
 
-Memory * Instance_meth_memory(Instance * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {"size", NULL};
-
-    VkDeviceSize size;
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "k", keywords, &size)) {
-        return NULL;
-    }
-
-    if (!self->instance) {
-        return NULL;
-    }
-
-    Memory * res = new_memory(self, false);
-    allocate_memory(res, size);
-    return res;
-}
-
-Image * Instance_meth_image(Instance * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {"size", "format", "memory", NULL};
-
-    uint32_t width;
-    uint32_t height;
-    const char * format_str = "4b";
-    Memory * memory = NULL;
-
-    int args_ok = PyArg_ParseTupleAndKeywords(
-        args,
-        kwargs,
-        "(II)|sO!",
-        keywords,
-        &width,
-        &height,
-        &format_str,
-        Memory_type,
-        &memory
-    );
-
-    if (!args_ok) {
-        return NULL;
-    }
-
-    if (!self->instance) {
-        return NULL;
-    }
-
-    if (!memory) {
-        memory = new_memory(self, false);
-    }
-
-    PyObject * format_obj = PyDict_GetItemString(format_dict, format_str);
-    if (!format_obj) {
-        return NULL;
-    }
-    VkFormat pixel_format = (VkFormat)PyLong_AsUnsignedLong(PyTuple_GetItem(format_obj, 0));
-    uint32_t pixel_size = PyLong_AsUnsignedLong(PyTuple_GetItem(format_obj, 1));
-
-    Image * res = new_image(
-        self,
-        width * height * pixel_size,
-        {width, height, 1},
-        pixel_format,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_SAMPLE_COUNT_1_BIT,
-        memory
-    );
-
-    if (!res) {
-        return NULL;
-    }
-
-    allocate_memory(memory);
-
-    if (memory->offset > memory->size) {
-        return NULL;
-    }
-
-    bind_image(res);
-
-    VkCommandBuffer cmd = begin_commands(self);
-
-    VkImageMemoryBarrier image_barrier = {
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        NULL,
-        0,
-        0,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        res->image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-    };
-
-    vkCmdPipelineBarrier(
-        cmd,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0,
-        0,
-        NULL,
-        0,
-        NULL,
-        1,
-        &image_barrier
-    );
-
-    end_commands(self);
-    return res;
-}
-
-Sampler * Instance_meth_sampler(Instance * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {
-        "image",
-        "address_mode_x",
-        "address_mode_y",
-        "address_mode_z",
-        "min_filter",
-        "mag_filter",
-        "mipmap_filter",
-        "normalized",
-        "anisotropy",
-        "max_anisotrpoy",
-        "min_lod",
-        "max_lod",
-        "lod_bias",
-        "border",
-        NULL,
-    };
-
-    Image * image;
-    VkSamplerAddressMode address_mode_x = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    VkSamplerAddressMode address_mode_y = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    VkSamplerAddressMode address_mode_z = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    VkFilter min_filter = VK_FILTER_NEAREST;
-    VkFilter mag_filter = VK_FILTER_NEAREST;
-    VkSamplerMipmapMode mipmap_filter = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    VkBool32 normalized = true;
-    VkBool32 anisotropy = false;
-    float max_anisotrpoy = 0.0f;
-    float min_lod = 0.0f;
-    float max_lod = 1000.0f;
-    float lod_bias = 0.0f;
-    PyObject * border = default_border;
-
-    int args_ok = PyArg_ParseTupleAndKeywords(
-        args,
-        kwargs,
-        "O!|O&O&O&O&O&O&ppffffO",
-        keywords,
-        Image_type,
-        &image,
-        convert_address_mode,
-        &address_mode_x,
-        convert_address_mode,
-        &address_mode_y,
-        convert_address_mode,
-        &address_mode_z,
-        convert_filter,
-        &min_filter,
-        convert_filter,
-        &mag_filter,
-        convert_mipmap_filter,
-        &mipmap_filter,
-        &normalized,
-        &anisotropy,
-        &max_anisotrpoy,
-        &min_lod,
-        &max_lod,
-        &lod_bias,
-        &border
-    );
-
-    if (!args_ok) {
-        return NULL;
-    }
-
-    if (!self->instance) {
-        return NULL;
-    }
-
-    Sampler * res = PyObject_New(Sampler, Sampler_type);
-
-    Py_INCREF(image);
-    res->image = image;
-
-    VkBorderColor border_color = (VkBorderColor)PyLong_AsUnsignedLong(PyDict_GetItem(float_border_dict, border));
-
-    res->info = {
-        VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        NULL,
-        0,
-        min_filter,
-        mag_filter,
-        mipmap_filter,
-        address_mode_x,
-        address_mode_y,
-        address_mode_z,
-        lod_bias,
-        anisotropy,
-        max_anisotrpoy,
-        false,
-        VK_COMPARE_OP_NEVER,
-        min_lod,
-        max_lod,
-        border_color,
-        !normalized,
-    };
-
-    res->swizzle = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
-
-    return res;
-}
-
-Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwargs) {
+Pipeline * Renderer_meth_pipeline(Renderer * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "vertex_shader",
         "fragment_shader",
@@ -1122,175 +1993,199 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         "instance_count",
         "index_count",
         "indirect_count",
+        "front_face",
+        "cull_mode",
+        "depth_test",
+        "depth_write",
+        "blending",
+        "primitive_restart",
         "topology",
-        "depth",
-        "blend",
-        "short_index",
         "samplers",
         "memory",
         NULL,
     };
 
-    PyObject * vertex_shader = Py_None;
-    PyObject * fragment_shader = Py_None;
-    PyObject * vertex_format = empty_str;
-    PyObject * instance_format = empty_str;
-    uint32_t vertex_count = 0;
-    uint32_t instance_count = 1;
-    uint32_t index_count = 0;
-    uint32_t indirect_count = 0;
-    const char * topology_str = "triangles";
-    VkBool32 depth = false;
-    VkBool32 blend = false;
-    VkBool32 short_index = false;
-    PyObject * samplers = empty_list;
-    Memory * memory = NULL;
+    struct {
+        PyObject * vertex_shader = Py_None;
+        PyObject * fragment_shader = Py_None;
+        PyObject * vertex_format = empty_str;
+        PyObject * instance_format = empty_str;
+        uint32_t vertex_count = 0;
+        uint32_t instance_count = 1;
+        uint32_t index_count = 0;
+        uint32_t indirect_count = 0;
+        PyObject * front_face = default_front_face;
+        PyObject * cull_mode = Py_None;
+        VkBool32 depth_test = true;
+        VkBool32 depth_write = true;
+        VkBool32 blending = false;
+        VkBool32 primitive_restart = false;
+        PyObject * topology = default_topology;
+        PyObject * samplers = Py_None;
+        PyObject * memory = Py_None;
+    } args;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
-        args,
+        vargs,
         kwargs,
-        "|$O!O!OOIIIIspppOO!",
+        "|$O!O!OOIIIIOOppppOOO",
         keywords,
         &PyBytes_Type,
-        &vertex_shader,
+        &args.vertex_shader,
         &PyBytes_Type,
-        &fragment_shader,
-        &vertex_format,
-        &instance_format,
-        &vertex_count,
-        &instance_count,
-        &index_count,
-        &indirect_count,
-        &topology_str,
-        &depth,
-        &blend,
-        &short_index,
-        &samplers,
-        Memory_type,
-        &memory
+        &args.fragment_shader,
+        &args.vertex_format,
+        &args.instance_format,
+        &args.vertex_count,
+        &args.instance_count,
+        &args.index_count,
+        &args.indirect_count,
+        &args.front_face,
+        &args.cull_mode,
+        &args.depth_test,
+        &args.depth_write,
+        &args.blending,
+        &args.primitive_restart,
+        &args.topology,
+        &args.samplers,
+        &args.memory
     );
 
     if (!args_ok) {
         return NULL;
     }
 
-    if (!self->instance) {
-        return NULL;
-    }
-    if (!memory) {
-        memory = new_memory(self->instance, false);
+    if (args.samplers == Py_None) {
+        args.samplers = empty_list;
     }
 
-    PyObject * topology_int = PyDict_GetItemString(topology_dict, topology_str);
-    VkPrimitiveTopology topology = (VkPrimitiveTopology)PyLong_AsUnsignedLong(topology_int);
+    Memory * memory = get_memory(self->instance, args.memory);
 
-    uint32_t bindings = 0;
-    VkVertexInputBindingDescription binding_array[64];
+    Pipeline * res = PyObject_New(Pipeline, Pipeline_type);
+
+    res->instance = self->instance;
+    res->vertex_count = args.vertex_count;
+    res->instance_count = args.instance_count;
+    res->index_count = args.index_count;
+    res->indirect_count = args.indirect_count;
+
+    PyObject * vertex_format = PyUnicode_Split(args.vertex_format, NULL, -1);
+    PyObject * instance_format = PyUnicode_Split(args.instance_format, NULL, -1);
+
+    uint32_t attribute_count = 0;
     VkVertexInputAttributeDescription attribute_array[64];
+    VkVertexInputBindingDescription binding_array[64];
 
     uint32_t vstride = 0;
-    PyObject * vertex_format_list = PyUnicode_Split(vertex_format, NULL, -1);
-    if (!vertex_format_list) {
-        return NULL;
-    }
-    for (uint32_t i = 0; i < PyList_Size(vertex_format_list); ++i) {
-        PyObject * obj = PyDict_GetItem(format_dict, PyList_GetItem(vertex_format_list, i));
-        VkFormat format = (VkFormat)PyLong_AsUnsignedLong(PyTuple_GetItem(obj, 0));
-        uint32_t size = PyLong_AsUnsignedLong(PyTuple_GetItem(obj, 1));
-        if (format) {
-            attribute_array[bindings] = {bindings, bindings, format, vstride};
-            bindings += 1;
-        }
-        vstride += size;
-    }
-    Py_DECREF(vertex_format_list);
-
-    uint32_t first_intance_binding = bindings;
-
     uint32_t istride = 0;
-    PyObject * instance_format_list = PyUnicode_Split(instance_format, NULL, -1);
-    if (!instance_format_list) {
-        return NULL;
-    }
-    for (uint32_t i = 0; i < PyList_Size(instance_format_list); ++i) {
-        PyObject * obj = PyDict_GetItem(format_dict, PyList_GetItem(instance_format_list, i));
-        VkFormat format = (VkFormat)PyLong_AsUnsignedLong(PyTuple_GetItem(obj, 0));
-        uint32_t size = PyLong_AsUnsignedLong(PyTuple_GetItem(obj, 1));
-        if (format) {
-            attribute_array[bindings] = {bindings, bindings, format, istride};
-            bindings += 1;
-        }
-        istride += size;
-    }
-    Py_DECREF(instance_format_list);
 
-    for (uint32_t i = 0; i < first_intance_binding; ++i) {
+    for (uint32_t i = 0; i < PyList_Size(vertex_format); ++i) {
+        Format format = get_format(PyList_GetItem(vertex_format, i));
+        if (format.format) {
+            uint32_t location = attribute_count++;
+            attribute_array[location] = {location, location, format.format, vstride};
+        }
+        vstride += format.size;
+    }
+
+    uint32_t vertex_attribute_count = attribute_count;
+
+    for (uint32_t i = 0; i < PyList_Size(instance_format); ++i) {
+        Format format = get_format(PyList_GetItem(instance_format, i));
+        if (format.format) {
+            uint32_t location = attribute_count++;
+            attribute_array[location] = {location, location, format.format, istride};
+        }
+        istride += format.size;
+    }
+
+    for (uint32_t i = 0; i < vertex_attribute_count; ++i) {
         binding_array[i] = {i, vstride, VK_VERTEX_INPUT_RATE_VERTEX};
     }
 
-    for (uint32_t i = first_intance_binding; i < bindings; ++i) {
+    for (uint32_t i = vertex_attribute_count; i < attribute_count; ++i) {
         binding_array[i] = {i, istride, VK_VERTEX_INPUT_RATE_INSTANCE};
     }
 
-    Renderer * res = PyObject_New(Renderer, Renderer_type);
-
-    res->ctx = self;
-    res->memory = memory;
-
+    VkBool32 short_index = false;
     uint32_t index_size = short_index ? 2 : 4;
-    uint32_t indirect_size = index_count ? 20 : 16;
-    res->index_type = short_index ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+    uint32_t indirect_size = args.index_count ? 20 : 16;
 
-    res->vertex_buffer = new_buffer(
-        self->instance,
-        vstride * vertex_count,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        memory
-    );
+    res->vertex_buffer = NULL;
+    res->instance_buffer = NULL;
+    res->index_buffer = NULL;
+    res->indirect_buffer = NULL;
 
-    res->instance_buffer = new_buffer(
-        self->instance,
-        istride * instance_count,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        memory
-    );
+    if (vstride * args.vertex_count) {
+        res->vertex_buffer = new_buffer({
+            self->instance,
+            memory,
+            vstride * args.vertex_count,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        });
+    }
 
-    res->index_buffer = new_buffer(
-        self->instance,
-        index_count * index_size,
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        memory
-    );
+    if (istride * args.instance_count) {
+        res->instance_buffer = new_buffer({
+            self->instance,
+            memory,
+            istride * args.instance_count,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        });
+    }
 
-    res->indirect_buffer = new_buffer(
-        self->instance,
-        indirect_count * indirect_size,
-        VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
-        memory
-    );
+    if (args.index_count) {
+        res->index_buffer = new_buffer({
+            self->instance,
+            memory,
+            args.index_count * index_size,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        });
+    }
+
+    if (args.indirect_count) {
+        res->indirect_buffer = new_buffer({
+            self->instance,
+            memory,
+            args.indirect_count * indirect_size,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+        });
+    }
 
     allocate_memory(memory);
 
-    if (memory->offset > memory->size) {
-        return NULL;
+    if (res->vertex_buffer) {
+        bind_buffer(res->vertex_buffer);
+    }
+    if (res->instance_buffer) {
+        bind_buffer(res->instance_buffer);
+    }
+    if (res->index_buffer) {
+        bind_buffer(res->index_buffer);
+    }
+    if (res->indirect_buffer) {
+        bind_buffer(res->indirect_buffer);
     }
 
-    bind_buffer(res->vertex_buffer);
-    bind_buffer(res->instance_buffer);
-    bind_buffer(res->index_buffer);
-    bind_buffer(res->indirect_buffer);
+    VkBuffer vertex_buffer_array[64];
 
-    res->sampler_count = (uint32_t)PyList_Size(samplers);
-    res->sampler_array = (VkSampler *)PyMem_Malloc(res->sampler_count * sizeof(VkSampler));
-    res->sampler_binding_array = (VkDescriptorImageInfo *)PyMem_Malloc(res->sampler_count * sizeof(VkDescriptorImageInfo));
+    for (uint32_t i = 0; i < vertex_attribute_count; ++i) {
+        vertex_buffer_array[i] = res->vertex_buffer->buffer;
+    }
 
-    res->image_list = PyList_New(res->sampler_count);
+    for (uint32_t i = vertex_attribute_count; i < attribute_count; ++i) {
+        vertex_buffer_array[i] = res->instance_buffer->buffer;
+    }
 
-    for (uint32_t i = 0; i < res->sampler_count; ++i) {
-        Sampler * obj = (Sampler *)PyList_GetItem(samplers, i);
+    res->vertex_buffers = preserve_array(attribute_count, vertex_buffer_array);
 
-        Py_INCREF(obj->image);
-        PyList_SetItem(res->image_list, i, (PyObject *)obj->image);
+    uint32_t sampler_count = (uint32_t)PyList_Size(args.samplers);
+    VkSampler sampler_array[64];
+    VkImageView image_view_array[64];
+    VkDescriptorImageInfo sampler_binding_array[64];
+
+    for (uint32_t i = 0; i < sampler_count; ++i) {
+        Sampler * obj = (Sampler *)PyList_GetItem(args.samplers, i);
 
         VkImageViewCreateInfo image_view_create_info = {
             VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -1299,8 +2194,8 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
             obj->image->image,
             VK_IMAGE_VIEW_TYPE_2D,
             obj->image->format,
-            obj->swizzle,
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            obj->component_mapping,
+            obj->subresource_range,
         };
 
         VkImageView image_view = NULL;
@@ -1309,41 +2204,66 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         VkSampler sampler = NULL;
         vkCreateSampler(self->instance->device, &obj->info, NULL, &sampler);
 
-        res->sampler_array[i] = sampler;
-
-        res->sampler_binding_array[i] = {
+        sampler_array[i] = sampler;
+        image_view_array[i] = image_view;
+        sampler_binding_array[i] = {
             NULL,
             image_view,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
     }
 
-    VkDescriptorSetLayoutBinding descriptor_set_layout_binding_array[] = {
-        {
+    uint32_t descriptor_buffer_binding = 0;
+    uint32_t descriptor_sampler_binding = 0;
+    uint32_t descriptor_binding_count = 0;
+    VkDescriptorSetLayoutBinding descriptor_binding_array[2];
+    VkDescriptorPoolSize descriptor_pool_size_array[2];
+
+    if (self->uniform_buffer) {
+        descriptor_buffer_binding = descriptor_binding_count++;
+        descriptor_binding_array[descriptor_buffer_binding] = {
             0,
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             1,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             NULL,
-        },
-        {
+        };
+        descriptor_pool_size_array[descriptor_buffer_binding] = {
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            1,
+        };
+    }
+
+    if (sampler_count) {
+        descriptor_sampler_binding = descriptor_binding_count++;
+        descriptor_binding_array[descriptor_sampler_binding] = {
             1,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            res->sampler_count,
+            sampler_count,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-            res->sampler_array,
-        },
-    };
+            sampler_array,
+        };
+        descriptor_pool_size_array[descriptor_sampler_binding] = {
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            sampler_count,
+        };
+    }
 
     VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         NULL,
         0,
-        (uint32_t)(res->sampler_count ? 2 : 1),
-        descriptor_set_layout_binding_array,
+        descriptor_binding_count,
+        descriptor_binding_array,
     };
 
     vkCreateDescriptorSetLayout(self->instance->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
+
+    VkPushConstantRange push_constant_range = {
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        0,
+        4,
+    };
 
     VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1351,75 +2271,71 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         0,
         1,
         &res->descriptor_set_layout,
-        0,
-        NULL,
+        1,
+        &push_constant_range,
     };
 
     vkCreatePipelineLayout(self->instance->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
 
-    VkDescriptorPoolSize descriptor_pool_size_array[] = {
-        {
-            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+    res->descriptor_pool = NULL;
+    res->descriptor_set = NULL;
+
+    if (descriptor_binding_count) {
+        VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            NULL,
+            0,
             1,
-        },
-        {
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            res->sampler_count,
-        },
-    };
+            descriptor_binding_count,
+            descriptor_pool_size_array,
+        };
 
-    VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        NULL,
-        0,
-        1,
-        (uint32_t)(res->sampler_count ? 2 : 1),
-        descriptor_pool_size_array,
-    };
+        vkCreateDescriptorPool(self->instance->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
 
-    vkCreateDescriptorPool(self->instance->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
+        VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            NULL,
+            res->descriptor_pool,
+            1,
+            &res->descriptor_set_layout,
+        };
 
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        NULL,
-        res->descriptor_pool,
-        1,
-        &res->descriptor_set_layout,
-    };
+        vkAllocateDescriptorSets(self->instance->device, &descriptor_set_allocate_info, &res->descriptor_set);
+    }
 
-    vkAllocateDescriptorSets(self->instance->device, &descriptor_set_allocate_info, &res->descriptor_set);
+    if (self->uniform_buffer) {
+        VkDescriptorBufferInfo descriptor_buffer_info = {
+            self->uniform_buffer->buffer,
+            0,
+            VK_WHOLE_SIZE,
+        };
 
-    VkDescriptorBufferInfo descriptor_buffer_info = {
-        self->uniform_buffer->buffer,
-        0,
-        VK_WHOLE_SIZE,
-    };
+        VkWriteDescriptorSet write_buffer_descriptor_set = {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            res->descriptor_set,
+            descriptor_buffer_binding,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            NULL,
+            &descriptor_buffer_info,
+            NULL,
+        };
 
-    VkWriteDescriptorSet write_buffer_descriptor_set = {
-        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        NULL,
-        res->descriptor_set,
-        0,
-        0,
-        1,
-        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        NULL,
-        &descriptor_buffer_info,
-        NULL,
-    };
+        vkUpdateDescriptorSets(self->instance->device, 1, &write_buffer_descriptor_set, 0, NULL);
+    }
 
-    vkUpdateDescriptorSets(self->instance->device, 1, &write_buffer_descriptor_set, 0, NULL);
-
-    if (res->sampler_count) {
+    if (sampler_count) {
         VkWriteDescriptorSet write_sampler_descriptor_set = {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             NULL,
             res->descriptor_set,
-            1,
+            descriptor_sampler_binding,
             0,
-            res->sampler_count,
+            sampler_count,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            res->sampler_binding_array,
+            sampler_binding_array,
             NULL,
             NULL,
         };
@@ -1431,8 +2347,8 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         NULL,
         0,
-        (VkDeviceSize)PyBytes_Size(vertex_shader),
-        (uint32_t *)PyBytes_AsString(vertex_shader),
+        (VkDeviceSize)PyBytes_Size(args.vertex_shader),
+        (uint32_t *)PyBytes_AsString(args.vertex_shader),
     };
 
     vkCreateShaderModule(self->instance->device, &vertex_shader_module_create_info, NULL, &res->vertex_shader_module);
@@ -1441,8 +2357,8 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         NULL,
         0,
-        (VkDeviceSize)PyBytes_Size(fragment_shader),
-        (uint32_t *)PyBytes_AsString(fragment_shader),
+        (VkDeviceSize)PyBytes_Size(args.fragment_shader),
+        (uint32_t *)PyBytes_AsString(args.fragment_shader),
     };
 
     vkCreateShaderModule(self->instance->device, &fragment_shader_module_create_info, NULL, &res->fragment_shader_module);
@@ -1472,9 +2388,9 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
         NULL,
         0,
-        bindings,
+        attribute_count,
         binding_array,
-        bindings,
+        attribute_count,
         attribute_array,
     };
 
@@ -1482,8 +2398,8 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         NULL,
         0,
-        topology,
-        false,
+        get_topology(args.topology),
+        args.primitive_restart,
     };
 
     VkPipelineViewportStateCreateInfo pipeline_viewport_state = {
@@ -1503,8 +2419,8 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         false,
         false,
         VK_POLYGON_MODE_FILL,
-        VK_CULL_MODE_BACK_BIT,
-        VK_FRONT_FACE_CLOCKWISE,
+        get_cull_mode(args.cull_mode),
+        get_front_face(args.front_face),
         false,
         0.0f,
         0.0f,
@@ -1516,7 +2432,7 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         NULL,
         0,
-        self->samples,
+        (VkSampleCountFlagBits)self->samples,
         false,
         0.0f,
         NULL,
@@ -1528,8 +2444,8 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         NULL,
         0,
-        depth,
-        depth,
+        args.depth_test,
+        args.depth_write,
         VK_COMPARE_OP_LESS,
         false,
         false,
@@ -1539,11 +2455,12 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         0.0f,
     };
 
+    uint32_t color_attachment_count = (uint32_t)PyTuple_Size(self->output);
     VkPipelineColorBlendAttachmentState pipeline_color_blend_attachment_array[64];
 
-    for (int i = 0; i < 64; ++i) {
+    for (uint32_t i = 0; i < color_attachment_count; ++i) {
         pipeline_color_blend_attachment_array[i] = {
-            blend,
+            args.blending,
             VK_BLEND_FACTOR_SRC_ALPHA,
             VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
             VK_BLEND_OP_ADD,
@@ -1560,7 +2477,7 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
         0,
         false,
         VK_LOGIC_OP_CLEAR,
-        self->color_attachment_count,
+        color_attachment_count,
         pipeline_color_blend_attachment_array,
         {0.0f, 0.0f, 0.0f, 0.0f},
     };
@@ -1599,198 +2516,75 @@ Renderer * Context_meth_renderer(Context * self, PyObject * args, PyObject * kwa
 
     vkCreateGraphicsPipelines(self->instance->device, NULL, 1, &graphics_pipeline_create_info, NULL, &res->pipeline);
 
-    res->vertex_count = vertex_count;
-    res->instance_count = instance_count;
-    res->index_count = index_count;
-    res->indirect_count = indirect_count;
-
-    res->vertex_buffer_count = bindings;
-    res->vertex_buffer_array = (VkBuffer *)PyMem_Malloc(bindings * sizeof(VkBuffer));
-    res->vertex_offset_array = (VkDeviceSize *)PyMem_Malloc(bindings * sizeof(VkDeviceSize));
-
-    for (uint32_t i = 0; i < first_intance_binding; ++i) {
-        res->vertex_buffer_array[i] = res->vertex_buffer->buffer;
-        res->vertex_offset_array[i] = 0;
-    }
-
-    for (uint32_t i = first_intance_binding; i < bindings; ++i) {
-        res->vertex_buffer_array[i] = res->instance_buffer->buffer;
-        res->vertex_offset_array[i] = 0;
-    }
-
-    PyList_Append(self->renderer_list, (PyObject *)res);
-    res->enabled = true;
+    PyList_Append(self->pipeline_list, (PyObject *)res);
     return res;
 }
 
-PyObject * Context_meth_update(Context * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {"uniform_buffer", "clear_value_buffer", NULL};
+PyObject * Renderer_meth_update(Renderer * self, PyObject * vargs, PyObject * kwargs) {
+    static char * keywords[] = {"size", "uniform_buffer", "clear_color", "clear_depth", NULL};
 
-    PyObject * uniform_buffer = Py_None;
-    PyObject * clear_value_buffer = Py_None;
+    struct {
+        uint32_t width;
+        uint32_t height;
+        PyObject * uniform_buffer = Py_None;
+        PyObject * clear_color = Py_None;
+        PyObject * clear_depth = Py_None;
+    } args;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|$OO", keywords, &uniform_buffer, &clear_value_buffer)) {
-        return NULL;
-    }
+    args.width = self->width;
+    args.height = self->height;
 
-    if (!self->instance) {
-        return NULL;
-    }
-
-    update_buffer(self->uniform_buffer, uniform_buffer);
-
-    if (clear_value_buffer != Py_None) {
-        Py_buffer view = {};
-        PyObject_GetBuffer(clear_value_buffer, &view, PyBUF_STRIDED_RO);
-        PyBuffer_ToContiguous(self->clear_value_array, &view, view.len, 'C');
-        PyBuffer_Release(&view);
-    }
-    Py_RETURN_NONE;
-}
-
-PyObject * Context_meth_render(Context * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {"size", NULL};
-
-    uint32_t width = self->width;
-    uint32_t height = self->height;
-
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|(II)", keywords, &width, &height)) {
-        return NULL;
-    }
-
-    if (!self->instance) {
-        return NULL;
-    }
-
-    VkCommandBuffer cmd = begin_commands(self->instance);
-
-    VkRenderPassBeginInfo render_pass_begin_info = {
-        VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        NULL,
-        self->render_pass,
-        self->framebuffer,
-        {{0, 0}, {width, height}},
-        self->attachment_count,
-        self->clear_value_array,
-    };
-
-    vkCmdBeginRenderPass(cmd, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    VkViewport viewport = {0.0f, 0.0f, (float)width, (float)height, 0.0f, 1.0f};
-    vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-    VkRect2D scissor = {{0, 0}, {width, height}};
-    vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-    for (int i = 0; i < PyList_Size(self->renderer_list); ++i) {
-        Renderer * renderer = (Renderer *)PyList_GetItem(self->renderer_list, i);
-        if (!renderer->enabled) {
-            continue;
-        }
-
-        if (renderer->vertex_buffer_count) {
-            vkCmdBindVertexBuffers(
-                cmd,
-                0,
-                renderer->vertex_buffer_count,
-                renderer->vertex_buffer_array,
-                renderer->vertex_offset_array
-            );
-        }
-
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->pipeline);
-        vkCmdBindDescriptorSets(
-            cmd,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            renderer->pipeline_layout,
-            0,
-            1,
-            &renderer->descriptor_set,
-            0,
-            NULL
-        );
-
-        if (renderer->index_count) {
-            vkCmdBindIndexBuffer(cmd, renderer->index_buffer->buffer, 0, renderer->index_type);
-        }
-
-        if (renderer->indirect_count && renderer->index_count) {
-            vkCmdDrawIndexedIndirect(cmd, renderer->indirect_buffer->buffer, 0, renderer->indirect_count, 20);
-        } else if (renderer->indirect_count) {
-            vkCmdDrawIndirect(cmd, renderer->indirect_buffer->buffer, 0, renderer->indirect_count, 16);
-        } else if (renderer->index_count) {
-            vkCmdDrawIndexed(cmd, renderer->index_count, renderer->instance_count, 0, 0, 0);
-        } else {
-            vkCmdDraw(cmd, renderer->vertex_count, renderer->instance_count, 0, 0);
-        }
-    }
-
-    vkCmdEndRenderPass(cmd);
-
-    vkCmdPipelineBarrier(
-        cmd,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0,
-        0,
-        NULL,
-        0,
-        NULL,
-        0,
-        NULL
+    int args_ok = PyArg_ParseTupleAndKeywords(
+        vargs,
+        kwargs,
+        "|$(II)OOO",
+        keywords,
+        &args.width,
+        &args.height,
+        &args.uniform_buffer,
+        &args.clear_color,
+        &args.clear_depth
     );
 
-    if (!self->render_to_image) {
-        VkDeviceSize offset = 0;
-        for (uint32_t i = 0; i < self->color_attachment_count; ++i) {
-            Image * image = self->color_attachment_array[i].resolve;
-
-            VkBufferImageCopy copy = {
-                offset,
-                width,
-                height,
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                {0, 0, 0},
-                {width, height, 1},
-            };
-
-            offset += image->size;
-
-            vkCmdCopyImageToBuffer(
-                cmd,
-                image->image,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                self->instance->host_buffer->buffer,
-                1,
-                &copy
-            );
-        }
+    if (!args_ok) {
+        return NULL;
     }
 
-    end_commands(self->instance);
-
-    if (!self->render_to_image && self->color_attachment_count == 1) {
-        VkDeviceSize size = width * height * self->color_attachment_array[0].size;
-        return PyBytes_FromStringAndSize((char *)self->instance->host_memory->ptr, size);
+    if (update_buffer(self->uniform_buffer, args.uniform_buffer)) {
+        return NULL;
     }
 
-    if (!self->render_to_image) {
-        PyObject * res = PyTuple_New(self->color_attachment_count);
-        char * ptr = (char *)self->instance->host_memory->ptr;
+    VkClearValue * clear_value_array = NULL;
+    uint32_t clear_value_count = retreive_array(self->clear_values, &clear_value_array);
 
-        for (uint32_t i = 0; i < self->color_attachment_count; ++i) {
-            VkDeviceSize size = width * height * self->color_attachment_array[i].size;
-            PyObject * obj = PyBytes_FromStringAndSize(ptr, size);
-            PyTuple_SetItem(res, i, obj);
-            ptr += size;
+    if (args.clear_depth != Py_None) {
+        if (!PyFloat_Check(args.clear_depth)) {
+            PyErr_Format(PyExc_TypeError, "expected float");
+            return NULL;
         }
-        return res;
+        clear_value_array[0].depthStencil.depth = (float)PyFloat_AsDouble(args.clear_depth);
+    }
+
+    if (args.clear_color != Py_None) {
+        Py_buffer view = {};
+        if (PyObject_GetBuffer(args.clear_color, &view, PyBUF_STRIDED_RO)) {
+            return NULL;
+        }
+
+        if (view.len != clear_value_count * 16 - (self->depth ? 16 : 0)) {
+            PyBuffer_Release(&view);
+            PyErr_Format(PyExc_ValueError, "wrong size");
+            return NULL;
+        }
+
+        PyBuffer_ToContiguous(clear_value_array + (self->depth ? 1 : 0), &view, view.len, 'C');
+        PyBuffer_Release(&view);
     }
 
     Py_RETURN_NONE;
 }
 
-PyObject * Renderer_meth_update(Renderer * self, PyObject * args, PyObject * kwargs) {
+PyObject * Pipeline_meth_update(Pipeline * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "vertex_buffer",
         "instance_buffer",
@@ -1800,94 +2594,100 @@ PyObject * Renderer_meth_update(Renderer * self, PyObject * args, PyObject * kwa
         "instance_count",
         "index_count",
         "indirect_count",
-        "enabled",
         NULL,
     };
 
-    PyObject * vertex_buffer = Py_None;
-    PyObject * instance_buffer = Py_None;
-    PyObject * index_buffer = Py_None;
-    PyObject * indirect_buffer = Py_None;
+    struct {
+        PyObject * vertex_buffer = Py_None;
+        PyObject * instance_buffer = Py_None;
+        PyObject * index_buffer = Py_None;
+        PyObject * indirect_buffer = Py_None;
+        uint32_t vertex_count;
+        uint32_t instance_count;
+        uint32_t index_count;
+        uint32_t indirect_count;
+    } args;
 
-    uint32_t vertex_count = self->vertex_count;
-    uint32_t instance_count = self->instance_count;
-    uint32_t index_count = self->index_count;
-    uint32_t indirect_count = self->indirect_count;
-    VkBool32 enabled = self->enabled;
+    args.vertex_count = self->vertex_count;
+    args.instance_count = self->instance_count;
+    args.index_count = self->index_count;
+    args.indirect_count = self->indirect_count;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
-        args,
+        vargs,
         kwargs,
-        "|$OOOOIIIIp",
+        "|$OOOOIIII",
         keywords,
-        &vertex_buffer,
-        &instance_buffer,
-        &index_buffer,
-        &indirect_buffer,
-        &vertex_count,
-        &instance_count,
-        &index_count,
-        &indirect_count,
-        &enabled
+        &args.vertex_buffer,
+        &args.instance_buffer,
+        &args.index_buffer,
+        &args.indirect_buffer,
+        &args.vertex_count,
+        &args.instance_count,
+        &args.index_count,
+        &args.indirect_count
     );
 
     if (!args_ok) {
         return NULL;
     }
 
-    if (!self->ctx->instance) {
-        return NULL;
-    }
+    update_buffer(self->vertex_buffer, args.vertex_buffer);
+    update_buffer(self->instance_buffer, args.instance_buffer);
+    update_buffer(self->index_buffer, args.index_buffer);
+    update_buffer(self->indirect_buffer, args.indirect_buffer);
 
-    update_buffer(self->vertex_buffer, vertex_buffer);
-    update_buffer(self->instance_buffer, instance_buffer);
-    update_buffer(self->index_buffer, index_buffer);
-    update_buffer(self->indirect_buffer, indirect_buffer);
-
-    self->vertex_count = vertex_count;
-    self->instance_count = instance_count;
-    self->index_count = index_count;
-    self->indirect_count = indirect_count;
-    self->enabled = enabled;
+    self->vertex_count = args.vertex_count;
+    self->instance_count = args.instance_count;
+    self->index_count = args.index_count;
+    self->indirect_count = args.indirect_count;
 
     Py_RETURN_NONE;
 }
 
-PyObject * Image_meth_write(Image * self, PyObject * args, PyObject * kwargs) {
+PyObject * Image_meth_write(Image * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {"data", NULL};
 
-    Py_buffer data = {};
+    struct {
+        Py_buffer data = {};
+    } args;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "y*", keywords, &data)) {
+    if (!PyArg_ParseTupleAndKeywords(vargs, kwargs, "y*", keywords, &args.data)) {
         return NULL;
     }
 
-    if (!self->instance) {
+    if (args.data.len != self->size) {
+        PyErr_Format(PyExc_ValueError, "wrong size");
         return NULL;
     }
 
-    resize_buffer(self->instance->host_buffer, (VkDeviceSize)data.len);
+    resize_buffer(self->instance->host_buffer, (VkDeviceSize)args.data.len);
 
-    PyBuffer_ToContiguous(self->instance->host_memory->ptr, &data, data.len, 'C');
-    PyBuffer_Release(&data);
+    PyBuffer_ToContiguous(self->instance->host_memory->ptr, &args.data, args.data.len, 'C');
+    PyBuffer_Release(&args.data);
 
-    VkCommandBuffer cmd = begin_commands(self->instance);
+    VkCommandBuffer command_buffer = begin_commands(self->instance);
+
+    VkImageLayout image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    if (self->mode == IMG_TEXTURE) {
+        image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
 
     VkImageMemoryBarrier image_barrier_transfer = {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         NULL,
         0,
         0,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_QUEUE_FAMILY_IGNORED,
         VK_QUEUE_FAMILY_IGNORED,
         self->image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
     };
 
     vkCmdPipelineBarrier(
-        cmd,
+        command_buffer,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0,
@@ -1903,13 +2703,13 @@ PyObject * Image_meth_write(Image * self, PyObject * args, PyObject * kwargs) {
         0,
         self->extent.width,
         self->extent.height,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, self->layers},
         {0, 0, 0},
         self->extent,
     };
 
     vkCmdCopyBufferToImage(
-        cmd,
+        command_buffer,
         self->instance->host_buffer->buffer,
         self->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -1917,298 +2717,131 @@ PyObject * Image_meth_write(Image * self, PyObject * args, PyObject * kwargs) {
         &copy
     );
 
-    VkImageMemoryBarrier image_barrier_general = {
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        NULL,
-        0,
-        0,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        self->image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-    };
+    if (self->samples == 1) {
+        VkImageMemoryBarrier image_barrier_general = {
+            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            NULL,
+            0,
+            0,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            image_layout,
+            VK_QUEUE_FAMILY_IGNORED,
+            VK_QUEUE_FAMILY_IGNORED,
+            self->image,
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
+        };
 
-    vkCmdPipelineBarrier(
-        cmd,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0,
-        0,
-        NULL,
-        0,
-        NULL,
-        1,
-        &image_barrier_general
-    );
+        vkCmdPipelineBarrier(
+            command_buffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            1,
+            &image_barrier_general
+        );
+    } else {
+        build_mipmaps({
+            command_buffer,
+            self->extent.width,
+            self->extent.height,
+            self->levels,
+            self->layers,
+            1,
+            self,
+        });
+    }
 
-    end_commands(self->instance);
+    end_commands(self->instance, command_buffer);
     Py_RETURN_NONE;
 }
 
-PyObject * Instance_meth_info(Instance * self) {
-    if (!self->instance) {
+PyObject * Image_meth_read(Image * self) {
+    if (self->mode != IMG_OUTPUT) {
+        PyErr_Format(PyExc_ValueError, "not an output image");
         return NULL;
     }
 
-    PyObject * context_info = PyList_New(PyList_Size(self->context_list));
-    for (uint32_t i = 0; i < PyList_Size(self->context_list); ++i) {
-        Context * context = (Context *)PyList_GetItem(self->context_list, i);
+    resize_buffer(self->instance->host_buffer, self->size);
 
-        PyObject * renderer_info = PyList_New(PyList_Size(context->renderer_list));
-        for (uint32_t j = 0; j < PyList_Size(context->renderer_list); ++j) {
-            Renderer * renderer = (Renderer *)PyList_GetItem(context->renderer_list, j);
+    VkCommandBuffer command_buffer = begin_commands(self->instance);
 
-            int vertex_buffer_index = list_index(self->buffer_list, renderer->vertex_buffer);
-            int instance_buffer_index = list_index(self->buffer_list, renderer->instance_buffer);
-            int index_buffer_index = list_index(self->buffer_list, renderer->index_buffer);
-            int indirect_buffer_index = list_index(self->buffer_list, renderer->indirect_buffer);
+    VkBufferImageCopy copy = {
+        0,
+        self->extent.width,
+        self->extent.height,
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, self->layers},
+        {0, 0, 0},
+        self->extent,
+    };
 
-            PyObject * image_info = PyList_New(PyList_Size(renderer->image_list));
-            for (uint32_t k = 0; k < PyList_Size(renderer->image_list); ++k) {
-                Image * image = (Image *)PyList_GetItem(renderer->image_list, k);
-                PyList_SetItem(image_info, k, PyLong_FromLong(list_index(self->image_list, image)));
-            }
-
-            PyList_SetItem(renderer_info, j, Py_BuildValue(
-                "{sOsIsIsIsIsisisisisN}",
-                "enabled",
-                renderer->enabled ? Py_True : Py_False,
-                "vertex_count",
-                renderer->vertex_count,
-                "instance_count",
-                renderer->instance_count,
-                "index_count",
-                renderer->index_count,
-                "indirect_count",
-                renderer->indirect_count,
-                "vertex_buffer",
-                vertex_buffer_index,
-                "instance_buffer",
-                instance_buffer_index,
-                "index_buffer",
-                index_buffer_index,
-                "indirect_buffer",
-                indirect_buffer_index,
-                "images",
-                image_info
-            ));
-        }
-
-        PyObject * color_attachment_info = PyList_New(context->color_attachment_count);
-        for (uint32_t j = 0; j < context->color_attachment_count; ++j) {
-            int image_index = list_index(self->image_list, context->color_attachment_array[j].image);
-            int resolve_index = list_index(self->image_list, context->color_attachment_array[j].resolve);
-            PyList_SetItem(color_attachment_info, j, Py_BuildValue(
-                "{sisi}",
-                "image",
-                image_index,
-                "resolve",
-                resolve_index
-            ));
-        }
-
-        int depth_image_index = list_index(self->image_list, context->depth_image);
-
-        PyList_SetItem(context_info, i, Py_BuildValue(
-            "{s{s(II)sIsisN}sN}",
-            "framebuffer",
-            "size",
-            context->width,
-            context->height,
-            "samples",
-            context->samples,
-            "depth_image",
-            depth_image_index,
-            "images",
-            color_attachment_info,
-            "renderers",
-            renderer_info
-        ));
-    }
-
-    PyObject * memory_info = PyList_New(PyList_Size(self->memory_list));
-    for (int i = 0; i < PyList_Size(self->memory_list); ++i) {
-        Memory * memory = (Memory *)PyList_GetItem(self->memory_list, i);
-        PyList_SetItem(memory_info, i, Py_BuildValue(
-            "{sksk}",
-            "size",
-            memory->size,
-            "offset",
-            memory->offset
-        ));
-    }
-
-    PyObject * buffer_info = PyList_New(PyList_Size(self->buffer_list));
-    for (int i = 0; i < PyList_Size(self->buffer_list); ++i) {
-        Buffer * buffer = (Buffer *)PyList_GetItem(self->buffer_list, i);
-        int memory_index = list_index(self->memory_list, buffer->memory);
-        PyList_SetItem(buffer_info, i, Py_BuildValue(
-            "{sIsksksi}",
-            "id",
-            buffer->buffer,
-            "size",
-            buffer->size,
-            "offset",
-            buffer->offset,
-            "memory",
-            memory_index
-        ));
-    }
-
-    PyObject * image_info = PyList_New(PyList_Size(self->image_list));
-    for (int i = 0; i < PyList_Size(self->image_list); ++i) {
-        Image * image = (Image *)PyList_GetItem(self->image_list, i);
-        int memory_index = list_index(self->memory_list, image->memory);
-        PyList_SetItem(image_info, i, Py_BuildValue(
-            "{s(II)sksi}",
-            "size",
-            image->extent.width,
-            image->extent.height,
-            "offset",
-            image->offset,
-            "memory",
-            memory_index
-        ));
-    }
-
-    int host_buffer_index = list_index(self->buffer_list, self->host_buffer);
-
-    return Py_BuildValue(
-        "{sNsNsNsNsi}",
-        "contexts",
-        context_info,
-        "memories",
-        memory_info,
-        "buffers",
-        buffer_info,
-        "images",
-        image_info,
-        "host_buffer",
-        host_buffer_index
+    vkCmdCopyImageToBuffer(
+        command_buffer,
+        self->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        self->instance->host_buffer->buffer,
+        1,
+        &copy
     );
 
-    return NULL;
+    end_commands(self->instance, command_buffer);
+    return PyBytes_FromStringAndSize((char *)self->instance->host_memory->ptr, self->size);
+}
+
+PyObject * Instance_meth_render(Instance * self, PyObject * vargs, PyObject * kwargs) {
+    static char * keywords[] = {
+        "update",
+        NULL,
+    };
+
+    struct {
+        PyObject * update;
+    } args;
+
+    int args_ok = PyArg_ParseTupleAndKeywords(
+        vargs,
+        kwargs,
+        "|O",
+        keywords,
+        &args.update
+    );
+
+    if (!args_ok) {
+        return NULL;
+    }
+
+    // update draw count, instance count, ...
+
+    // copy staging buffer -> vertex buffer, indirect buffer, ...
+    // copy staging buffer -> uniform buffer
+    // copy staging buffer -> image
+
+    // render all
+
+    // copy images -> staging buffer
+    // copy images -> swapchain images
+
+    VkCommandBuffer command_buffer = begin_commands(self);
+
+    for (uint32_t i = 0; i < PyList_Size(self->renderer_list); ++i) {
+        Renderer * renderer = (Renderer *)PyList_GetItem(self->renderer_list, i);
+        render(command_buffer, renderer);
+    }
+
+    #ifndef BUILD_HEADLESS
+    end_commands_with_present(self, command_buffer);
+    #else
+    end_commands(self, command_buffer);
+    #endif
+
     Py_RETURN_NONE;
 }
 
 PyObject * Instance_meth_release(Instance * self) {
-    if (!self->instance) {
-        return NULL;
-    }
-
-    for (int i = 0; i < PyList_Size(self->context_list); ++i) {
-        Context * context = (Context *)PyList_GetItem(self->context_list, i);
-
-        vkDestroyFramebuffer(self->device, context->framebuffer, NULL);
-        vkDestroyRenderPass(self->device, context->render_pass, NULL);
-
-        for (uint32_t i = 0; i < context->attachment_count; ++i) {
-            vkDestroyImageView(self->device, context->attachment_image_view_array[i], NULL);
-        }
-
-        for (int j = 0; j < PyList_Size(context->renderer_list); ++j) {
-            Renderer * renderer = (Renderer *)PyList_GetItem(context->renderer_list, j);
-
-            vkDestroyPipeline(self->device, renderer->pipeline, NULL);
-            vkDestroyPipelineLayout(self->device, renderer->pipeline_layout, NULL);
-            vkDestroyShaderModule(self->device, renderer->vertex_shader_module, NULL);
-            vkDestroyShaderModule(self->device, renderer->fragment_shader_module, NULL);
-
-            vkDestroyDescriptorPool(self->device, renderer->descriptor_pool, NULL);
-            vkDestroyDescriptorSetLayout(self->device, renderer->descriptor_set_layout, NULL);
-
-            for (uint32_t k = 0; k < renderer->sampler_count; ++k) {
-                vkDestroySampler(self->device, renderer->sampler_array[k], NULL);
-                vkDestroyImageView(self->device, renderer->sampler_binding_array[k].imageView, NULL);
-            }
-        }
-    }
-
-    for (int i = 0; i < PyList_Size(self->buffer_list); ++i) {
-        Buffer * buffer = (Buffer *)PyList_GetItem(self->buffer_list, i);
-        if (buffer->buffer) {
-            vkDestroyBuffer(self->device, buffer->buffer, NULL);
-        }
-    }
-
-    for (int i = 0; i < PyList_Size(self->image_list); ++i) {
-        Image * image = (Image *)PyList_GetItem(self->image_list, i);
-        vkDestroyImage(self->device, image->image, NULL);
-    }
-
-    vkDestroyCommandPool(self->device, self->command_pool, NULL);
-    vkDestroyFence(self->device, self->fence, NULL);
-
-    for (int i = 0; i < PyList_Size(self->memory_list); ++i) {
-        Memory * memory = (Memory *)PyList_GetItem(self->memory_list, i);
-        vkFreeMemory(self->device, memory->memory, NULL);
-    }
-
-    vkDestroyDevice(self->device, NULL);
-    vkDestroyInstance(self->instance, NULL);
-    self->instance = NULL;
     Py_RETURN_NONE;
-}
-
-PyObject * glnext_meth_pack(PyObject * self, PyObject ** args, Py_ssize_t nargs) {
-    if (nargs != 1 && nargs != 2) {
-        return NULL;
-    }
-
-    PyObject * seq = PySequence_Fast(args[nargs - 1], "");
-    PyObject ** array = PySequence_Fast_ITEMS(seq);
-
-    int row_size = 0;
-    int format_count = 0;
-    PackType format_array[256];
-
-    if (nargs == 1) {
-        format_array[format_count++] = PyLong_CheckExact(array[0]) ? PACK_INT : PACK_FLOAT;
-        row_size = 4;
-    } else {
-        PyObject * vformat = PyUnicode_Split(args[0], NULL, -1);
-        if (!vformat) {
-            return NULL;
-        }
-        for (int k = 0; k < PyList_Size(vformat); ++k) {
-            PyObject * format = PyDict_GetItem(format_dict, PyList_GetItem(vformat, k));
-            PackType pack_type = (PackType)PyLong_AsUnsignedLong(PyTuple_GetItem(format, 2));
-            int pack_items = PyLong_AsLong(PyTuple_GetItem(format, 3));
-            row_size += PyLong_AsLong(PyTuple_GetItem(format, 1));
-            while (pack_items--) {
-                format_array[format_count++] = pack_type;
-            }
-        }
-        Py_DECREF(vformat);
-    }
-
-    int rows = (int)PySequence_Fast_GET_SIZE(seq) / format_count;
-
-    PyObject * res = PyBytes_FromStringAndSize(NULL, rows * row_size);
-    char * data = PyBytes_AsString(res);
-
-    for (int i = 0; i < rows; ++i) {
-        for (int k = 0; k < format_count; ++k) {
-            switch (format_array[k]) {
-                case PACK_FLOAT:
-                    *(*(float **)&data)++ = (float)PyFloat_AsDouble(*array++);
-                    break;
-                case PACK_INT:
-                    *(*(int **)&data)++ = PyLong_AsLong(*array++);
-                    break;
-                case PACK_BYTE:
-                    *(*(uint8_t **)&data)++ = (uint8_t)PyLong_AsUnsignedLong(*array++);
-                    break;
-                case PACK_PAD:
-                    *data++ = 0;
-                    break;
-            }
-        }
-    }
-
-    return res;
 }
 
 struct vec3 {
@@ -2286,67 +2919,130 @@ PyObject * glnext_meth_camera(PyObject * self, PyObject * args, PyObject * kwarg
     return PyBytes_FromStringAndSize((char *)res, 64);
 }
 
+PyObject * glnext_meth_pack(PyObject * self, PyObject ** args, Py_ssize_t nargs) {
+    if (nargs != 1 && nargs != 2) {
+        return NULL;
+    }
+
+    PyObject * seq = PySequence_Fast(args[nargs - 1], "");
+    PyObject ** array = PySequence_Fast_ITEMS(seq);
+
+    int row_size = 0;
+    int format_count = 0;
+    int padding_format_count = 0;
+    PackType format_array[256];
+
+    if (nargs == 1) {
+        format_array[format_count++] = PyLong_CheckExact(array[0]) ? PACK_INT : PACK_FLOAT;
+        row_size = 4;
+    } else {
+        PyObject * vformat = PyUnicode_Split(args[0], NULL, -1);
+        for (int k = 0; k < PyList_Size(vformat); ++k) {
+            Format format = get_format(PyList_GetItem(vformat, k));
+            row_size += format.size;
+            if (format.pack_type == PACK_PAD) {
+                padding_format_count += format.pack_count;
+            }
+            for (int i = 0; i < format.pack_count; ++i) {
+                format_array[format_count++] = format.pack_type;
+            }
+        }
+        Py_DECREF(vformat);
+    }
+
+    int rows = (int)PySequence_Fast_GET_SIZE(seq) / (format_count - padding_format_count);
+
+    PyObject * res = PyBytes_FromStringAndSize(NULL, rows * row_size);
+    char * data = PyBytes_AsString(res);
+
+    for (int i = 0; i < rows; ++i) {
+        for (int k = 0; k < format_count; ++k) {
+            switch (format_array[k]) {
+                case PACK_FLOAT:
+                    *(*(float **)&data)++ = (float)PyFloat_AsDouble(*array++);
+                    break;
+                case PACK_INT:
+                    *(*(int **)&data)++ = PyLong_AsLong(*array++);
+                    break;
+                case PACK_BYTE:
+                    *(*(uint8_t **)&data)++ = (uint8_t)PyLong_AsUnsignedLong(*array++);
+                    break;
+                case PACK_PAD:
+                    *data++ = 0;
+                    break;
+            }
+        }
+    }
+
+    return res;
+}
+
 void default_dealloc(PyObject * self) {
     Py_TYPE(self)->tp_free(self);
 }
 
 PyMemberDef Instance_members[] = {
     {"device_memory", T_OBJECT, offsetof(Instance, device_memory), READONLY, NULL},
+    {"staging_buffer", T_OBJECT, offsetof(Instance, staging_memoryview), READONLY, NULL},
     {},
 };
 
 PyMethodDef Instance_methods[] = {
-    {"context", (PyCFunction)Instance_meth_context, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"memory", (PyCFunction)Instance_meth_memory, METH_VARARGS | METH_KEYWORDS, NULL},
+    #ifndef BUILD_HEADLESS
+    {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
+    #endif
+
+    {"renderer", (PyCFunction)Instance_meth_renderer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
     {"sampler", (PyCFunction)Instance_meth_sampler, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"render", (PyCFunction)Instance_meth_render, METH_VARARGS | METH_KEYWORDS, NULL},
     {"release", (PyCFunction)Instance_meth_release, METH_NOARGS, NULL},
-    {"info", (PyCFunction)Instance_meth_info, METH_NOARGS, NULL},
     {},
 };
 
-PyMemberDef Context_members[] = {
-    {"output", T_OBJECT, offsetof(Context, output), READONLY, NULL},
-    {},
-};
-
-PyMethodDef Context_methods[] = {
-    {"renderer", (PyCFunction)Context_meth_renderer, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"update", (PyCFunction)Context_meth_update, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"render", (PyCFunction)Context_meth_render, METH_VARARGS | METH_KEYWORDS, NULL},
+PyMemberDef Renderer_members[] = {
+    {"output", T_OBJECT, offsetof(Renderer, output), READONLY, NULL},
     {},
 };
 
 PyMethodDef Renderer_methods[] = {
+    {"pipeline", (PyCFunction)Renderer_meth_pipeline, METH_VARARGS | METH_KEYWORDS, NULL},
     {"update", (PyCFunction)Renderer_meth_update, METH_VARARGS | METH_KEYWORDS, NULL},
+    {},
+};
+
+PyMethodDef Pipeline_methods[] = {
+    {"update", (PyCFunction)Pipeline_meth_update, METH_VARARGS | METH_KEYWORDS, NULL},
     {},
 };
 
 PyMethodDef Image_methods[] = {
     {"write", (PyCFunction)Image_meth_write, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"read", (PyCFunction)Image_meth_read, METH_NOARGS, NULL},
     {},
 };
 
 PyType_Slot Instance_slots[] = {
+    {Py_tp_members, Instance_members},
     {Py_tp_methods, Instance_methods},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
 
-PyType_Slot Context_slots[] = {
-    {Py_tp_members, Context_members},
-    {Py_tp_methods, Context_methods},
+PyType_Slot Renderer_slots[] = {
+    {Py_tp_members, Renderer_members},
+    {Py_tp_methods, Renderer_methods},
+    {Py_tp_dealloc, default_dealloc},
+    {},
+};
+
+PyType_Slot Pipeline_slots[] = {
+    {Py_tp_methods, Pipeline_methods},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
 
 PyType_Slot Memory_slots[] = {
-    {Py_tp_dealloc, default_dealloc},
-    {},
-};
-
-PyType_Slot Renderer_slots[] = {
-    {Py_tp_methods, Renderer_methods},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
@@ -2368,17 +3064,17 @@ PyType_Slot Sampler_slots[] = {
 };
 
 PyType_Spec Instance_spec = {"glnext.Instance", sizeof(Instance), 0, Py_TPFLAGS_DEFAULT, Instance_slots};
-PyType_Spec Context_spec = {"glnext.Context", sizeof(Context), 0, Py_TPFLAGS_DEFAULT, Context_slots};
-PyType_Spec Memory_spec = {"glnext.Memory", sizeof(Memory), 0, Py_TPFLAGS_DEFAULT, Memory_slots};
 PyType_Spec Renderer_spec = {"glnext.Renderer", sizeof(Renderer), 0, Py_TPFLAGS_DEFAULT, Renderer_slots};
+PyType_Spec Pipeline_spec = {"glnext.Pipeline", sizeof(Pipeline), 0, Py_TPFLAGS_DEFAULT, Pipeline_slots};
+PyType_Spec Memory_spec = {"glnext.Memory", sizeof(Memory), 0, Py_TPFLAGS_DEFAULT, Memory_slots};
 PyType_Spec Buffer_spec = {"glnext.Buffer", sizeof(Buffer), 0, Py_TPFLAGS_DEFAULT, Buffer_slots};
 PyType_Spec Image_spec = {"glnext.Image", sizeof(Image), 0, Py_TPFLAGS_DEFAULT, Image_slots};
 PyType_Spec Sampler_spec = {"glnext.Sampler", sizeof(Sampler), 0, Py_TPFLAGS_DEFAULT, Sampler_slots};
 
 PyMethodDef module_methods[] = {
     {"instance", (PyCFunction)glnext_meth_instance, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"pack", (PyCFunction)glnext_meth_pack, METH_FASTCALL, NULL},
     {"camera", (PyCFunction)glnext_meth_camera, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"pack", (PyCFunction)glnext_meth_pack, METH_FASTCALL, NULL},
     {},
 };
 
@@ -2388,82 +3084,25 @@ extern "C" PyObject * PyInit_glnext() {
     PyObject * module = PyModule_Create(&module_def);
 
     Instance_type = (PyTypeObject *)PyType_FromSpec(&Instance_spec);
-    Context_type = (PyTypeObject *)PyType_FromSpec(&Context_spec);
-    Memory_type = (PyTypeObject *)PyType_FromSpec(&Memory_spec);
     Renderer_type = (PyTypeObject *)PyType_FromSpec(&Renderer_spec);
+    Pipeline_type = (PyTypeObject *)PyType_FromSpec(&Pipeline_spec);
+    Memory_type = (PyTypeObject *)PyType_FromSpec(&Memory_spec);
     Buffer_type = (PyTypeObject *)PyType_FromSpec(&Buffer_spec);
     Image_type = (PyTypeObject *)PyType_FromSpec(&Image_spec);
     Sampler_type = (PyTypeObject *)PyType_FromSpec(&Sampler_spec);
 
-    default_framebuffer_format = PyUnicode_FromString("4b");
-    default_border = PyUnicode_FromString("transparent");
-
-    empty_list = PyList_New(0);
     empty_str = PyUnicode_FromString("");
+    empty_list = PyList_New(0);
 
-    sampler_address_mode_dict = Py_BuildValue(
-        "{sIsIsIsIsI}",
-        "repeat", VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        "mirrored_repeat", VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
-        "clamp_to_edge", VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        "clamp_to_border", VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-        "mirror_clamp_to_edge", VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE
-    );
-
-    sampler_filter_dict = Py_BuildValue(
-        "{sIsI}",
-        "nearest", VK_FILTER_NEAREST,
-        "linear", VK_FILTER_LINEAR
-    );
-
-    mipmap_filter_dict = Py_BuildValue(
-        "{sIsI}",
-        "nearest", VK_SAMPLER_MIPMAP_MODE_NEAREST,
-        "linear", VK_SAMPLER_MIPMAP_MODE_LINEAR
-    );
-
-    float_border_dict = Py_BuildValue(
-        "{sIsIsI}",
-        "transparent", VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
-        "black", VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-        "white", VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE
-    );
-
-    int_border_dict = Py_BuildValue(
-        "{sIsIsI}",
-        "transparent", VK_BORDER_COLOR_INT_TRANSPARENT_BLACK,
-        "black", VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-        "white", VK_BORDER_COLOR_INT_OPAQUE_WHITE
-    );
-
-    topology_dict = Py_BuildValue(
-        "{sIsIsIsIsIsI}",
-        "points", VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
-        "lines", VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-        "line_strip", VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
-        "triangles", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-        "triangle_strip", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-        "triangle_fan", VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN
-    );
-
-    format_dict = PyDict_New();
-
-    register_format("1f", VK_FORMAT_R32_SFLOAT, 4, PACK_FLOAT, 1);
-    register_format("2f", VK_FORMAT_R32G32_SFLOAT, 8, PACK_FLOAT, 2);
-    register_format("3f", VK_FORMAT_R32G32B32_SFLOAT, 12, PACK_FLOAT, 3);
-    register_format("4f", VK_FORMAT_R32G32B32A32_SFLOAT, 16, PACK_FLOAT, 4);
-    register_format("1i", VK_FORMAT_R32_SINT, 4, PACK_INT, 1);
-    register_format("2i", VK_FORMAT_R32G32_SINT, 8, PACK_INT, 2);
-    register_format("3i", VK_FORMAT_R32G32B32_SINT, 12, PACK_INT, 3);
-    register_format("4i", VK_FORMAT_R32G32B32A32_SINT, 16, PACK_INT, 4);
-    register_format("1b", VK_FORMAT_R8_UNORM, 1, PACK_BYTE, 1);
-    register_format("2b", VK_FORMAT_R8G8_UNORM, 2, PACK_BYTE, 2);
-    register_format("3b", VK_FORMAT_R8G8B8_UNORM, 3, PACK_BYTE, 3);
-    register_format("4b", VK_FORMAT_B8G8R8A8_UNORM, 4, PACK_BYTE, 4);
-    register_format("1x", VK_FORMAT_UNDEFINED, 1, PACK_PAD, 1);
-    register_format("2x", VK_FORMAT_UNDEFINED, 2, PACK_PAD, 2);
-    register_format("3x", VK_FORMAT_UNDEFINED, 3, PACK_PAD, 3);
-    register_format("4x", VK_FORMAT_UNDEFINED, 4, PACK_PAD, 4);
+    default_topology = PyUnicode_FromString("triangles");
+    default_front_face = PyUnicode_FromString("counter_clockwise");
+    default_border_color = PyUnicode_FromString("transparent");
+    default_format = PyUnicode_FromString("4b");
+    default_filter = PyUnicode_FromString("nearest");
+    default_address_mode = PyUnicode_FromString("repeat");
+    default_swizzle = PyUnicode_FromString("rgba");
+    texture_str = PyUnicode_FromString("texture");
+    output_str = PyUnicode_FromString("output");
 
     return module;
 }
