@@ -101,16 +101,16 @@ def test_renderer_clear_color(instance):
         0.0, 0.0, 0.0, 1.0,
     ]))
     instance.render()
-    assert renderer.output[0].read().hex() == '0000ff00' * 16
+    assert renderer.output[0].read().hex() == 'ff000000' * 16
     assert renderer.output[1].read().hex() == '00ff0000' * 16
-    assert renderer.output[2].read().hex() == 'ff000000' * 16
+    assert renderer.output[2].read().hex() == '0000ff00' * 16
     assert renderer.output[3].read().hex() == '000000ff' * 16
 
 
 def test_renderer_clear_color_integer(instance):
     renderer = instance.renderer((4, 4), '2i', depth=False, mode='output')
-    renderer.update(clear_color=glnext.pack('2i 8x', [
-        0x12345678, 0xaabbaabb,
+    renderer.update(clear_color=glnext.pack('4i', [
+        0x12345678, 0x33ff33ff, 0, 0,
     ]))
     instance.render()
-    assert renderer.output[0].read().hex() == '78563412bbaabbaa' * 16
+    assert renderer.output[0].read().hex() == '78563412ff33ff33' * 16
