@@ -1,4 +1,3 @@
-import os
 import pytest
 import glnext
 
@@ -8,7 +7,7 @@ def instance():
     instance = glnext.instance(
         headless=True,
         application_name='glnext_tests',
-        layers=os.getenv('TEST_VULKAN_LAYERS', '').split(),
+        layers=['VK_LAYER_KHRONOS_validation'],
     )
     yield instance
     instance.release()
