@@ -9,7 +9,7 @@ from PIL import Image
 
 instance = glnext.instance()
 
-renderer = instance.renderer((512, 512))
+renderer = instance.render_set((512, 512))
 
 pipeline = renderer.pipeline(
     vertex_shader=glsl('''
@@ -53,3 +53,27 @@ instance.render()
 data = renderer.output[0].read()
 Image.frombuffer('RGB', (512, 512), data, 'raw', 'BGRX', 0, -1).show()
 ```
+
+## Install
+
+```
+pip install glnext
+```
+
+### Windows
+
+With up2date drivers the vulkan runtime binaries should already be on your system.
+Install the [vulkan-sdk](https://vulkan.lunarg.com/sdk/home) if needed.
+
+### Linux
+
+Install the [vulkan-sdk](https://vulkan.lunarg.com/sdk/home).
+
+```
+apt-get install libx11-dev
+```
+
+## Without GPU
+
+This project is compatible with [swiftshader](https://github.com/google/swiftshader).
+The [CI](https://github.com/cprogrammer1994/glnext/actions/) also runs on pure CPU. [(Dockerfile)](Dockerfile)
