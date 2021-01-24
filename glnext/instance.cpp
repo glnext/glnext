@@ -281,6 +281,10 @@ PyObject * Instance_meth_render(Instance * self) {
         staging_output_buffer(command_buffer, encoder->output_buffer);
     }
 
-    end_commands(self);
+    if (self->presenter.surface_count) {
+        end_commands_with_present(self);
+    } else {
+        end_commands(self);
+    }
     Py_RETURN_NONE;
 }

@@ -4,6 +4,7 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
     static char * keywords[] = {
         "window",
         "image",
+        "format",
         NULL
     };
 
@@ -16,7 +17,7 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "OO!O",
+        "OO!|O",
         keywords,
         &args.window,
         self->state->Image_type,

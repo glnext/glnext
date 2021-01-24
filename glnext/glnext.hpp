@@ -299,6 +299,7 @@ PyObject * alloc_array(uint32_t size, T ** array) {
 
 VkCommandBuffer begin_commands(Instance * instance);
 void end_commands(Instance * instance);
+void end_commands_with_present(Instance * instance);
 
 Memory * new_memory(Instance * instance, VkBool32 host);
 Memory * get_memory(Instance * instance, PyObject * memory);
