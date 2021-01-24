@@ -4,7 +4,7 @@ from PIL import Image
 
 instance = glnext.instance()
 
-triangle_renderer = instance.renderer((512, 512), mode='texture')
+triangle_renderer = instance.render_set((512, 512), mode='texture')
 
 triangle_pipeline = triangle_renderer.pipeline(
     vertex_shader=glsl('''
@@ -46,7 +46,7 @@ triangle_pipeline = triangle_renderer.pipeline(
 
 sampler = instance.sampler(triangle_renderer.output[0])
 
-renderer = instance.renderer((512, 512))
+renderer = instance.render_set((512, 512))
 
 pipeline = renderer.pipeline(
     vertex_shader=glsl('''

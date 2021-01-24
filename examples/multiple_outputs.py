@@ -4,7 +4,7 @@ from PIL import Image
 
 instance = glnext.instance()
 
-renderer = instance.renderer((512, 512), '4b 4b', samples=4)
+renderer = instance.render_set((512, 512), '4b 4b', samples=4)
 
 pipeline = renderer.pipeline(
     vertex_shader=glsl('''

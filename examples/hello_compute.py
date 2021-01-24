@@ -4,7 +4,7 @@ from PIL import Image
 
 instance = glnext.instance(layers=['VK_LAYER_KHRONOS_validation'])
 
-compute = instance.compute(
+compute = instance.compute_set(
     compute_shader=glsl('''
         #version 450
         #pragma shader_stage(compute)

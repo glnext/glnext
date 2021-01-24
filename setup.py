@@ -31,7 +31,24 @@ if target == 'linux':
 
 glnext = Extension(
     name='glnext',
-    sources=['./glnext.cpp'],
+    sources=['./glnext/glnext.cpp'],
+    depends=[
+        './glnext/glnext.hpp',
+        './glnext/buffer.cpp',
+        './glnext/compute_set.cpp',
+        './glnext/encoder.cpp',
+        './glnext/image.cpp',
+        './glnext/instance.cpp',
+        './glnext/memory.cpp',
+        './glnext/pipeline.cpp',
+        './glnext/render_set.cpp',
+        './glnext/sampler.cpp',
+        './glnext/staging_buffer.cpp',
+        './glnext/surface.cpp',
+        './glnext/tools.cpp',
+        './glnext/transform.cpp',
+        './glnext/utils.cpp',
+    ],
     define_macros=define_macros,
     extra_compile_args=extra_compile_args,
     extra_link_args=extra_link_args,
@@ -45,7 +62,7 @@ with open('README.md') as readme:
 
 setup(
     name='glnext',
-    version='0.2.0',
+    version='0.3.0',
     ext_modules=[glnext],
     long_description=long_description,
     long_description_content_type='text/markdown',

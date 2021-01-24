@@ -4,9 +4,9 @@ from PIL import Image
 
 from cube_mesh import white_cube
 
-instance = glnext.instance()
+instance = glnext.instance(layers=['VK_LAYER_KHRONOS_validation'])
 
-renderer = instance.renderer((512, 512))
+renderer = instance.render_set((512, 512), uniform_buffer=64)
 
 pipeline = renderer.pipeline(
     vertex_shader=glsl('''

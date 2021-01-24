@@ -10,7 +10,7 @@ image.write(texture.tobytes())
 
 sampler = instance.sampler(image)
 
-renderer = instance.renderer((512, 512))
+renderer = instance.render_set((512, 512))
 
 pipeline = renderer.pipeline(
     vertex_shader=glsl('''
