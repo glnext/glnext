@@ -6,9 +6,8 @@ import pytest
 @pytest.fixture()
 def instance():
     instance = glnext.instance(
-        headless=True,
         application_name='glnext_tests',
-        layers=['VK_LAYER_KHRONOS_validation'],
+        debug=True,
     )
     yield instance
     # instance.release()
