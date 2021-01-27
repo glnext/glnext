@@ -1,8 +1,7 @@
 import glnext
 from glnext_compiler import glsl
+from objloader import Obj
 from PIL import Image
-
-from cube_mesh import white_cube
 
 instance = glnext.instance()
 
@@ -46,7 +45,7 @@ pipeline = framebuffer.render(
             out_color = vec4(lum, lum, lum, 1.0);
         }
     '''),
-    vertex_format='3f 3f 4f',
+    vertex_format='3f 3f',
     vertex_count=36,
     buffers=[
         {
@@ -59,7 +58,7 @@ pipeline = framebuffer.render(
 )
 
 pipeline['uniform_buffer'].write(glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0)))
-pipeline['vertex_buffer'].write(white_cube)
+pipeline['vertex_buffer'].write(Obj.open('examples/cube.obj').pack('vx vy vz nx ny nz'))
 
 instance.run()
 data = framebuffer.output[0].read()
