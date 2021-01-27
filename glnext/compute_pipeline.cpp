@@ -146,7 +146,6 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     res->write_descriptor_set_array = (VkWriteDescriptorSet *)PyMem_Malloc(sizeof(VkWriteDescriptorSet) * descriptor_binding_count);
 
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        uint32_t binding = res->buffer_array[i].binding;
         res->descriptor_binding_array[i] = {
             res->buffer_array[i].binding,
             res->buffer_array[i].descriptor_type,
@@ -198,60 +197,65 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         };
     }
 
-    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        NULL,
-        0,
-        descriptor_binding_count,
-        res->descriptor_binding_array,
-    };
-
-    self->vkCreateDescriptorSetLayout(self->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
-
     VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         NULL,
         0,
-        1,
-        &res->descriptor_set_layout,
+        0,
+        NULL,
         0,
         NULL,
     };
 
-    self->vkCreatePipelineLayout(self->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
+    if (descriptor_binding_count) {
+        VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            NULL,
+            0,
+            descriptor_binding_count,
+            res->descriptor_binding_array,
+        };
 
-    VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        NULL,
-        0,
-        1,
-        descriptor_binding_count,
-        res->descriptor_pool_size_array,
-    };
+        self->vkCreateDescriptorSetLayout(self->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
 
-    self->vkCreateDescriptorPool(self->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
+        pipeline_layout_create_info.setLayoutCount = 1;
+        pipeline_layout_create_info.pSetLayouts = &res->descriptor_set_layout;
 
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        NULL,
-        res->descriptor_pool,
-        1,
-        &res->descriptor_set_layout,
-    };
+        VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            NULL,
+            0,
+            1,
+            descriptor_binding_count,
+            res->descriptor_pool_size_array,
+        };
 
-    self->vkAllocateDescriptorSets(self->device, &descriptor_set_allocate_info, &res->descriptor_set);
+        self->vkCreateDescriptorPool(self->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
 
-    for (uint32_t i = 0; i < descriptor_binding_count; ++i) {
-        res->write_descriptor_set_array[i].dstSet = res->descriptor_set;
+        VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            NULL,
+            res->descriptor_pool,
+            1,
+            &res->descriptor_set_layout,
+        };
+
+        self->vkAllocateDescriptorSets(self->device, &descriptor_set_allocate_info, &res->descriptor_set);
+
+        for (uint32_t i = 0; i < descriptor_binding_count; ++i) {
+            res->write_descriptor_set_array[i].dstSet = res->descriptor_set;
+        }
+
+        self->vkUpdateDescriptorSets(
+            self->device,
+            descriptor_binding_count,
+            res->write_descriptor_set_array,
+            NULL,
+            NULL
+        );
     }
 
-    self->vkUpdateDescriptorSets(
-        self->device,
-        descriptor_binding_count,
-        res->write_descriptor_set_array,
-        NULL,
-        NULL
-    );
+    self->vkCreatePipelineLayout(self->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
 
     VkShaderModuleCreateInfo compute_shader_module_create_info = {
         VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,

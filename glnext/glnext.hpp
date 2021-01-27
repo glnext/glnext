@@ -258,6 +258,9 @@ struct RenderPipeline {
     uint32_t image_count;
     BufferBinding * buffer_array;
     ImageBinding * image_array;
+    VkDescriptorSetLayoutBinding * descriptor_binding_array;
+    VkDescriptorPoolSize * descriptor_pool_size_array;
+    VkWriteDescriptorSet * write_descriptor_set_array;
     VkDescriptorSetLayout descriptor_set_layout;
     VkPipelineLayout pipeline_layout;
     VkDescriptorPool descriptor_pool;

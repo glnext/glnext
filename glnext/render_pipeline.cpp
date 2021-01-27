@@ -191,6 +191,10 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         bind_buffer(res->buffer_array[i].buffer);
     }
 
+    for (uint32_t i = 0; i < res->buffer_count; ++i) {
+        res->buffer_array[i].descriptor_buffer_info.buffer = res->buffer_array[i].buffer->buffer;
+    }
+
     if (res->vertex_buffer) {
         bind_buffer(res->vertex_buffer);
     }
@@ -250,62 +254,54 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         res->attribute_offset_array[i] = 0;
     }
 
-    uint32_t descriptor_binding_count = 0;
-    VkDescriptorSetLayoutBinding descriptor_binding_array[64];
-    VkDescriptorPoolSize descriptor_pool_size_array[64];
-    VkDescriptorBufferInfo descriptor_buffer_info_array[64];
-    VkWriteDescriptorSet write_descriptor_set_array[64];
+    uint32_t descriptor_binding_count = res->buffer_count + res->image_count;
+    res->descriptor_binding_array = (VkDescriptorSetLayoutBinding *)PyMem_Malloc(sizeof(VkDescriptorSetLayoutBinding) * descriptor_binding_count);
+    res->descriptor_pool_size_array = (VkDescriptorPoolSize *)PyMem_Malloc(sizeof(VkDescriptorPoolSize) * descriptor_binding_count);
+    res->write_descriptor_set_array = (VkWriteDescriptorSet *)PyMem_Malloc(sizeof(VkWriteDescriptorSet) * descriptor_binding_count);
 
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        uint32_t binding = descriptor_binding_count++;
-        descriptor_binding_array[binding] = {
-            binding,
+        res->descriptor_binding_array[i] = {
+            res->buffer_array[i].binding,
             res->buffer_array[i].descriptor_type,
             1,
             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             NULL,
         };
-        descriptor_pool_size_array[binding] = {
+        res->descriptor_pool_size_array[i] = {
             res->buffer_array[i].descriptor_type,
             1,
         };
-        descriptor_buffer_info_array[binding] = {
-            res->buffer_array[i].buffer->buffer,
-            0,
-            VK_WHOLE_SIZE,
-        };
-        write_descriptor_set_array[binding] = {
+        res->write_descriptor_set_array[i] = {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             NULL,
             NULL,
-            binding,
+            res->buffer_array[i].binding,
             0,
             1,
             res->buffer_array[i].descriptor_type,
             NULL,
-            &descriptor_buffer_info_array[binding],
+            &res->buffer_array[i].descriptor_buffer_info,
             NULL,
         };
     }
 
     for (uint32_t i = 0; i < res->image_count; ++i) {
-        uint32_t binding = descriptor_binding_count++;
-        descriptor_binding_array[binding] = {
-            binding,
+        res->descriptor_binding_array[res->buffer_count + i] = {
+            res->image_array[i].binding,
             res->image_array[i].descriptor_type,
             1,
-            VK_SHADER_STAGE_COMPUTE_BIT,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             NULL,
         };
-        descriptor_pool_size_array[binding] = {
+        res->descriptor_pool_size_array[res->buffer_count + i] = {
             res->image_array[i].descriptor_type,
             1,
         };
-        write_descriptor_set_array[binding] = {
+        res->write_descriptor_set_array[res->buffer_count + i] = {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             NULL,
             NULL,
-            binding,
+            res->image_array[i].binding,
             0,
             1,
             res->image_array[i].descriptor_type,
@@ -314,16 +310,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
             NULL,
         };
     }
-
-    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        NULL,
-        0,
-        descriptor_binding_count,
-        descriptor_binding_array,
-    };
-
-    self->instance->vkCreateDescriptorSetLayout(self->instance->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
 
     VkPushConstantRange push_constant_range = {
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -335,46 +321,61 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         NULL,
         0,
-        1,
-        &res->descriptor_set_layout,
+        0,
+        NULL,
         1,
         &push_constant_range,
     };
 
-    self->instance->vkCreatePipelineLayout(self->instance->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
+    if (descriptor_binding_count) {
+        VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            NULL,
+            0,
+            descriptor_binding_count,
+            res->descriptor_binding_array,
+        };
 
-    VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        NULL,
-        0,
-        1,
-        descriptor_binding_count,
-        descriptor_pool_size_array,
-    };
+        self->instance->vkCreateDescriptorSetLayout(self->instance->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
 
-    self->instance->vkCreateDescriptorPool(self->instance->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
+        pipeline_layout_create_info.setLayoutCount = 1;
+        pipeline_layout_create_info.pSetLayouts = &res->descriptor_set_layout;
 
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        NULL,
-        res->descriptor_pool,
-        1,
-        &res->descriptor_set_layout,
-    };
+        VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            NULL,
+            0,
+            1,
+            descriptor_binding_count,
+            res->descriptor_pool_size_array,
+        };
 
-    self->instance->vkAllocateDescriptorSets(self->instance->device, &descriptor_set_allocate_info, &res->descriptor_set);
+        self->instance->vkCreateDescriptorPool(self->instance->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
 
-    for (uint32_t i = 0; i < descriptor_binding_count; ++i) {
-        write_descriptor_set_array[i].dstSet = res->descriptor_set;
+        VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            NULL,
+            res->descriptor_pool,
+            1,
+            &res->descriptor_set_layout,
+        };
+
+        self->instance->vkAllocateDescriptorSets(self->instance->device, &descriptor_set_allocate_info, &res->descriptor_set);
+
+        for (uint32_t i = 0; i < descriptor_binding_count; ++i) {
+            res->write_descriptor_set_array[i].dstSet = res->descriptor_set;
+        }
+
+        self->instance->vkUpdateDescriptorSets(
+            self->instance->device,
+            descriptor_binding_count,
+            res->write_descriptor_set_array,
+            NULL,
+            NULL
+        );
     }
 
-    self->instance->vkUpdateDescriptorSets(
-        self->instance->device,
-        descriptor_binding_count,
-        write_descriptor_set_array,
-        NULL,
-        NULL
-    );
+    self->instance->vkCreatePipelineLayout(self->instance->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
 
     VkShaderModuleCreateInfo vertex_shader_module_create_info = {
         VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
