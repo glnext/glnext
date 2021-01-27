@@ -43,35 +43,3 @@ def test_transform_input_output(instance):
     instance.run()
     array = np.frombuffer(transfrom['output_buffer'].read(), 'u4')
     np.testing.assert_array_almost_equal(array, data + 1)
-
-
-def test_transform_inplace(instance):
-    transfrom = instance.compute(
-        compute_count=8,
-        compute_shader=glsl('''
-            #version 450
-            #pragma shader_stage(compute)
-
-            layout (binding = 0) buffer InputOutput {
-                int number[];
-            };
-
-            void main() {
-                number[gl_GlobalInvocationID.x] = number[gl_GlobalInvocationID.x] + 1;
-            }
-        '''),
-        buffers=[
-            {
-                'binding': 0,
-                'name': 'numbers',
-                'type': 'storage_buffer',
-                'size': 32,
-            },
-        ]
-    )
-
-    data = np.array([1, 2, 3, 4, 5, 6, 7, 8], 'u4')
-    transfrom['numbers'].write(data)
-    instance.run()
-    array = np.frombuffer(transfrom['numbers'].read(), 'u4')
-    np.testing.assert_array_almost_equal(array, data + 1)
