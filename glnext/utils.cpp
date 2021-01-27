@@ -1,6 +1,6 @@
 #include "glnext.hpp"
 
-VkCommandBuffer begin_commands(Instance * instance) {
+VkCommandBuffer begin_commands(Instance * self) {
     VkCommandBufferBeginInfo command_buffer_begin_info = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         NULL,
@@ -8,12 +8,12 @@ VkCommandBuffer begin_commands(Instance * instance) {
         NULL,
     };
 
-    vkBeginCommandBuffer(instance->command_buffer, &command_buffer_begin_info);
-    return instance->command_buffer;
+    self->vkBeginCommandBuffer(self->command_buffer, &command_buffer_begin_info);
+    return self->command_buffer;
 }
 
-void end_commands(Instance * instance) {
-    vkEndCommandBuffer(instance->command_buffer);
+void end_commands(Instance * self) {
+    self->vkEndCommandBuffer(self->command_buffer);
 
     VkSubmitInfo submit_info = {
         VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -22,33 +22,33 @@ void end_commands(Instance * instance) {
         NULL,
         NULL,
         1,
-        &instance->command_buffer,
+        &self->command_buffer,
         0,
         NULL,
     };
 
-    vkQueueSubmit(instance->queue, 1, &submit_info, instance->fence);
-    vkWaitForFences(instance->device, 1, &instance->fence, true, UINT64_MAX);
-    vkResetFences(instance->device, 1, &instance->fence);
+    self->vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
+    self->vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
+    self->vkResetFences(self->device, 1, &self->fence);
 }
 
-Memory * new_memory(Instance * instance, VkBool32 host) {
-    Memory * res = PyObject_New(Memory, instance->state->Memory_type);
-    res->instance = instance;
+Memory * new_memory(Instance * self, VkBool32 host) {
+    Memory * res = PyObject_New(Memory, self->state->Memory_type);
+    res->instance = self;
     res->memory = NULL;
     res->offset = 0;
     res->size = 0;
     res->host = host;
     res->ptr = NULL;
-    PyList_Append(instance->memory_list, (PyObject *)res);
+    PyList_Append(self->memory_list, (PyObject *)res);
     return res;
 }
 
-Memory * get_memory(Instance * instance, PyObject * memory) {
+Memory * get_memory(Instance * self, PyObject * memory) {
     if (memory == Py_None) {
-        return new_memory(instance);
+        return new_memory(self);
     }
-    if (PyObject_Type(memory) == (PyObject *)instance->state->Memory_type) {
+    if (PyObject_Type(memory) == (PyObject *)self->state->Memory_type) {
         return (Memory *)memory;
     }
     PyErr_Format(PyExc_TypeError, "memory");
@@ -81,18 +81,20 @@ void allocate_memory(Memory * self) {
     };
 
     self->size = self->offset;
-    vkAllocateMemory(self->instance->device, &memory_allocate_info, NULL, &self->memory);
+    self->instance->vkAllocateMemory(self->instance->device, &memory_allocate_info, NULL, &self->memory);
 
     if (self->host) {
-        vkMapMemory(self->instance->device, self->memory, 0, VK_WHOLE_SIZE, 0, &self->ptr);
+        self->instance->vkMapMemory(self->instance->device, self->memory, 0, VK_WHOLE_SIZE, 0, &self->ptr);
     }
 }
 
 void free_memory(Memory * self) {
     if (self->host) {
-        vkUnmapMemory(self->instance->device, self->memory);
+        self->instance->vkUnmapMemory(self->instance->device, self->memory);
     }
-    vkFreeMemory(self->instance->device, self->memory, NULL);
+
+    self->instance->vkFreeMemory(self->instance->device, self->memory, NULL);
+
     self->memory = NULL;
     self->ptr = NULL;
     self->offset = 0;
@@ -101,6 +103,7 @@ void free_memory(Memory * self) {
 
 Image * new_image(ImageCreateInfo info) {
     Image * res = PyObject_New(Image, info.instance->state->Image_type);
+
     res->instance = info.instance;
     res->memory = info.memory;
     res->offset = 0;
@@ -139,10 +142,10 @@ Image * new_image(ImageCreateInfo info) {
         VK_IMAGE_LAYOUT_UNDEFINED,
     };
 
-    vkCreateImage(info.instance->device, &image_info, NULL, &res->image);
+    info.instance->vkCreateImage(info.instance->device, &image_info, NULL, &res->image);
 
     VkMemoryRequirements requirements = {};
-    vkGetImageMemoryRequirements(info.instance->device, res->image, &requirements);
+    info.instance->vkGetImageMemoryRequirements(info.instance->device, res->image, &requirements);
     res->offset = take_memory(info.memory, &requirements);
 
     PyList_Append(info.instance->image_list, (PyObject *)res);
@@ -151,6 +154,7 @@ Image * new_image(ImageCreateInfo info) {
 
 Buffer * new_buffer(BufferCreateInfo info) {
     Buffer * res = PyObject_New(Buffer, info.instance->state->Buffer_type);
+
     res->instance = info.instance;
     res->memory = info.memory;
     res->offset = 0;
@@ -171,22 +175,22 @@ Buffer * new_buffer(BufferCreateInfo info) {
         NULL,
     };
 
-    vkCreateBuffer(info.instance->device, &buffer_info, NULL, &res->buffer);
+    info.instance->vkCreateBuffer(info.instance->device, &buffer_info, NULL, &res->buffer);
 
     VkMemoryRequirements requirements = {};
-    vkGetBufferMemoryRequirements(info.instance->device, res->buffer, &requirements);
+    info.instance->vkGetBufferMemoryRequirements(info.instance->device, res->buffer, &requirements);
     res->offset = take_memory(info.memory, &requirements);
 
     PyList_Append(info.instance->buffer_list, (PyObject *)res);
     return res;
 }
 
-void bind_image(Image * image) {
-    vkBindImageMemory(image->instance->device, image->image, image->memory->memory, image->offset);
+void bind_image(Image * self) {
+    self->instance->vkBindImageMemory(self->instance->device, self->image, self->memory->memory, self->offset);
 }
 
-void bind_buffer(Buffer * buffer) {
-    vkBindBufferMemory(buffer->instance->device, buffer->buffer, buffer->memory->memory, buffer->offset);
+void bind_buffer(Buffer * self) {
+    self->instance->vkBindBufferMemory(self->instance->device, self->buffer, self->memory->memory, self->offset);
 }
 
 BufferBinding parse_buffer_binding(PyObject * obj) {
@@ -195,23 +199,50 @@ BufferBinding parse_buffer_binding(PyObject * obj) {
     PyObject * type = PyDict_GetItemString(obj, "type");
     PyObject * buffer = PyDict_GetItemString(obj, "buffer");
 
+    res.name = PyDict_GetItemString(obj, "name");
+    res.binding = PyLong_AsUnsignedLong(PyDict_GetItemString(obj, "binding"));
+
+    if (!res.name) {
+        res.name = Py_None;
+    }
+
+    Py_INCREF(res.name);
+
     if (buffer && buffer != Py_None) {
         res.buffer = (Buffer *)buffer;
     } else {
         res.size = PyLong_AsUnsignedLongLong(PyDict_GetItemString(obj, "size"));
     }
 
-    res.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    if (!PyUnicode_CompareWithASCIIString(type, "uniform_buffer")) {
+        res.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        res.descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        res.mode = BUF_UNIFORM;
+    }
 
     if (!PyUnicode_CompareWithASCIIString(type, "storage_buffer")) {
-        res.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        res.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        res.mode = BUF_STORAGE;
     }
 
-    if (!PyUnicode_CompareWithASCIIString(type, "uniform_buffer")) {
-        res.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        res.descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    if (!PyUnicode_CompareWithASCIIString(type, "input_buffer")) {
+        res.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        res.mode = BUF_INPUT;
     }
+
+    if (!PyUnicode_CompareWithASCIIString(type, "output_buffer")) {
+        res.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        res.mode = BUF_OUTPUT;
+    }
+
+    res.descriptor_buffer_info = {
+        NULL,
+        0,
+        VK_WHOLE_SIZE,
+    };
 
     return res;
 }
@@ -220,6 +251,15 @@ ImageBinding parse_image_binding(PyObject * obj) {
     ImageBinding res = {};
 
     PyObject * type = PyDict_GetItemString(obj, "type");
+
+    res.name = PyDict_GetItemString(obj, "name");
+    res.binding = PyLong_AsUnsignedLong(PyDict_GetItemString(obj, "binding"));
+
+    if (!res.name) {
+        res.name = Py_None;
+    }
+
+    Py_INCREF(res.name);
 
     res.sampled = false;
     res.image_count = 1;
@@ -281,7 +321,7 @@ ImageBinding parse_image_binding(PyObject * obj) {
     return res;
 }
 
-void new_temp_buffer(Instance * instance, HostBuffer * temp, VkDeviceSize size) {
+void new_temp_buffer(Instance * self, HostBuffer * temp, VkDeviceSize size) {
     VkBufferCreateInfo buffer_create_info = {
         VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         NULL,
@@ -293,27 +333,27 @@ void new_temp_buffer(Instance * instance, HostBuffer * temp, VkDeviceSize size) 
         NULL,
     };
 
-    vkCreateBuffer(instance->device, &buffer_create_info, NULL, &temp->buffer);
+    self->vkCreateBuffer(self->device, &buffer_create_info, NULL, &temp->buffer);
 
     VkMemoryRequirements requirements = {};
-    vkGetBufferMemoryRequirements(instance->device, temp->buffer, &requirements);
+    self->vkGetBufferMemoryRequirements(self->device, temp->buffer, &requirements);
 
     VkMemoryAllocateInfo memory_allocate_info = {
         VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         NULL,
         requirements.size,
-        instance->host_memory_type_index,
+        self->host_memory_type_index,
     };
 
-    vkAllocateMemory(instance->device, &memory_allocate_info, NULL, &temp->memory);
-    vkMapMemory(instance->device, temp->memory, 0, size, 0, &temp->ptr);
-    vkBindBufferMemory(instance->device, temp->buffer, temp->memory, 0);
+    self->vkAllocateMemory(self->device, &memory_allocate_info, NULL, &temp->memory);
+    self->vkMapMemory(self->device, temp->memory, 0, size, 0, &temp->ptr);
+    self->vkBindBufferMemory(self->device, temp->buffer, temp->memory, 0);
 }
 
-void free_temp_buffer(Instance * instance, HostBuffer * temp) {
-    vkUnmapMemory(instance->device, temp->memory);
-    vkFreeMemory(instance->device, temp->memory, NULL);
-    vkDestroyBuffer(instance->device, temp->buffer, NULL);
+void free_temp_buffer(Instance * self, HostBuffer * temp) {
+    self->vkUnmapMemory(self->device, temp->memory);
+    self->vkFreeMemory(self->device, temp->memory, NULL);
+    self->vkDestroyBuffer(self->device, temp->buffer, NULL);
 }
 
 VkPrimitiveTopology get_topology(PyObject * name) {

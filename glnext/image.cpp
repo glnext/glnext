@@ -96,7 +96,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
         {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, args.layers},
     };
 
-    vkCmdPipelineBarrier(
+    self->vkCmdPipelineBarrier(
         command_buffer,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -134,7 +134,7 @@ PyObject * Image_meth_read(Image * self) {
         self->extent,
     };
 
-    vkCmdCopyImageToBuffer(
+    self->instance->vkCmdCopyImageToBuffer(
         command_buffer,
         self->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -196,7 +196,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
         {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
     };
 
-    vkCmdPipelineBarrier(
+    self->instance->vkCmdPipelineBarrier(
         command_buffer,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
@@ -218,7 +218,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
         self->extent,
     };
 
-    vkCmdCopyBufferToImage(
+    self->instance->vkCmdCopyBufferToImage(
         command_buffer,
         temp.buffer,
         self->image,
@@ -241,7 +241,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
             {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
         };
 
-        vkCmdPipelineBarrier(
+        self->instance->vkCmdPipelineBarrier(
             command_buffer,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,

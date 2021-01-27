@@ -143,7 +143,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     res->index_buffer = NULL;
     res->indirect_buffer = NULL;
 
-    if (vstride * args.vertex_count) {
+    if (vstride && args.vertex_count) {
         res->vertex_buffer = new_buffer({
             self->instance,
             memory,
@@ -152,7 +152,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         });
     }
 
-    if (istride * args.instance_count) {
+    if (istride && args.instance_count) {
         res->instance_buffer = new_buffer({
             self->instance,
             memory,
@@ -205,7 +205,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         ImageBinding & image_binding = res->image_array[i];
         for (uint32_t j = 0; j < image_binding.image_count; ++j) {
             VkImageView image_view = NULL;
-            vkCreateImageView(
+            self->instance->vkCreateImageView(
                 self->instance->device,
                 &image_binding.image_view_create_info_array[j],
                 NULL,
@@ -213,7 +213,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
             );
             VkSampler sampler = NULL;
             if (image_binding.sampled) {
-                vkCreateSampler(
+                self->instance->vkCreateSampler(
                     self->instance->device,
                     &image_binding.sampler_create_info_array[j],
                     NULL,
@@ -317,7 +317,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         descriptor_binding_array,
     };
 
-    vkCreateDescriptorSetLayout(self->instance->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
+    self->instance->vkCreateDescriptorSetLayout(self->instance->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
 
     VkPushConstantRange push_constant_range = {
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -335,7 +335,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         &push_constant_range,
     };
 
-    vkCreatePipelineLayout(self->instance->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
+    self->instance->vkCreatePipelineLayout(self->instance->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
 
     VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -346,7 +346,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         descriptor_pool_size_array,
     };
 
-    vkCreateDescriptorPool(self->instance->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
+    self->instance->vkCreateDescriptorPool(self->instance->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
 
     VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -356,13 +356,13 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         &res->descriptor_set_layout,
     };
 
-    vkAllocateDescriptorSets(self->instance->device, &descriptor_set_allocate_info, &res->descriptor_set);
+    self->instance->vkAllocateDescriptorSets(self->instance->device, &descriptor_set_allocate_info, &res->descriptor_set);
 
     for (uint32_t i = 0; i < descriptor_binding_count; ++i) {
         write_descriptor_set_array[i].dstSet = res->descriptor_set;
     }
 
-    vkUpdateDescriptorSets(
+    self->instance->vkUpdateDescriptorSets(
         self->instance->device,
         descriptor_binding_count,
         write_descriptor_set_array,
@@ -378,7 +378,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         (uint32_t *)PyBytes_AsString(args.vertex_shader),
     };
 
-    vkCreateShaderModule(self->instance->device, &vertex_shader_module_create_info, NULL, &res->vertex_shader_module);
+    self->instance->vkCreateShaderModule(self->instance->device, &vertex_shader_module_create_info, NULL, &res->vertex_shader_module);
 
     VkShaderModuleCreateInfo fragment_shader_module_create_info = {
         VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -388,7 +388,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         (uint32_t *)PyBytes_AsString(args.fragment_shader),
     };
 
-    vkCreateShaderModule(self->instance->device, &fragment_shader_module_create_info, NULL, &res->fragment_shader_module);
+    self->instance->vkCreateShaderModule(self->instance->device, &fragment_shader_module_create_info, NULL, &res->fragment_shader_module);
 
     VkPipelineShaderStageCreateInfo pipeline_shader_stage_array[] = {
         {
@@ -541,55 +541,65 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         0,
     };
 
-    vkCreateGraphicsPipelines(self->instance->device, NULL, 1, &graphics_pipeline_create_info, NULL, &res->pipeline);
+    self->instance->vkCreateGraphicsPipelines(self->instance->device, NULL, 1, &graphics_pipeline_create_info, NULL, &res->pipeline);
 
-    res->buffer = PyTuple_New(res->buffer_count);
+    res->members = PyDict_New();
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        PyTuple_SetItem(res->buffer, i, (PyObject *)res->buffer_array[i].buffer);
-        Py_INCREF(res->buffer_array[i].buffer);
+        if (res->buffer_array[i].name != Py_None) {
+            PyDict_SetItem(res->members, res->buffer_array[i].name, (PyObject *)res->buffer_array[i].buffer);
+        }
     }
 
     PyList_Append(self->render_pipeline_list, (PyObject *)res);
     return res;
 }
 
-void execute_render_pipeline(VkCommandBuffer command_buffer, RenderPipeline * pipeline) {
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
+void execute_render_pipeline(RenderPipeline * self) {
+    self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->pipeline);
 
-    if (pipeline->vertex_attribute_count) {
-        vkCmdBindVertexBuffers(
-            command_buffer,
+    if (self->vertex_attribute_count) {
+        self->instance->vkCmdBindVertexBuffers(
+            self->instance->command_buffer,
             0,
-            pipeline->vertex_attribute_count,
-            pipeline->vertex_attribute_buffer_array,
-            pipeline->vertex_attribute_offset_array
+            self->vertex_attribute_count,
+            self->vertex_attribute_buffer_array,
+            self->vertex_attribute_offset_array
         );
     }
 
-    if (pipeline->descriptor_set) {
-        vkCmdBindDescriptorSets(
-            command_buffer,
+    if (self->descriptor_set) {
+        self->instance->vkCmdBindDescriptorSets(
+            self->instance->command_buffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
-            pipeline->pipeline_layout,
+            self->pipeline_layout,
             0,
             1,
-            &pipeline->descriptor_set,
+            &self->descriptor_set,
             0,
             NULL
         );
     }
 
-    if (pipeline->index_buffer) {
-        vkCmdBindIndexBuffer(command_buffer, pipeline->index_buffer->buffer, 0, VK_INDEX_TYPE_UINT32);
+    if (self->index_buffer) {
+        self->instance->vkCmdBindIndexBuffer(
+            self->instance->command_buffer,
+            self->index_buffer->buffer,
+            0,
+            VK_INDEX_TYPE_UINT32
+        );
     }
 
-    if (pipeline->indirect_count && pipeline->index_count) {
-        vkCmdDrawIndexedIndirect(command_buffer, pipeline->indirect_buffer->buffer, 0, pipeline->indirect_count, 20);
-    } else if (pipeline->indirect_count) {
-        vkCmdDrawIndirect(command_buffer, pipeline->indirect_buffer->buffer, 0, pipeline->indirect_count, 16);
-    } else if (pipeline->index_count) {
-        vkCmdDrawIndexed(command_buffer, pipeline->index_count, pipeline->instance_count, 0, 0, 0);
+    if (self->indirect_count && self->index_count) {
+        self->instance->vkCmdDrawIndexedIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->indirect_count, 20);
+    } else if (self->indirect_count) {
+        self->instance->vkCmdDrawIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->indirect_count, 16);
+    } else if (self->index_count) {
+        self->instance->vkCmdDrawIndexed(self->instance->command_buffer, self->index_count, self->instance_count, 0, 0, 0);
     } else {
-        vkCmdDraw(command_buffer, pipeline->vertex_count, pipeline->instance_count, 0, 0);
+        self->instance->vkCmdDraw(self->instance->command_buffer, self->vertex_count, self->instance_count, 0, 0);
     }
+}
+
+PyObject * RenderPipeline_subscript(RenderPipeline * self, PyObject * key) {
+    return PyObject_GetItem(self->members, key);
 }

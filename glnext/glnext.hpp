@@ -4,6 +4,7 @@
 #include <Python.h>
 #include <structmember.h>
 
+#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
 #ifdef BUILD_WINDOWS
@@ -19,6 +20,7 @@
 #endif
 
 #ifdef BUILD_LINUX
+#include <dlfcn.h>
 #include <X11/Xlib.h>
 #include <vulkan/vulkan_xlib.h>
 #define SURFACE_EXTENSION "VK_KHR_xlib_surface"
@@ -32,8 +34,10 @@ enum ImageMode {
 };
 
 enum BufferMode {
-    BUF_STORAGE,
     BUF_UNIFORM,
+    BUF_STORAGE,
+    BUF_INPUT,
+    BUF_OUTPUT,
 };
 
 typedef void (* Packer)(char * ptr, PyObject ** obj);
@@ -118,19 +122,88 @@ struct Instance {
     PyObject * log_list;
 
     ModuleState * state;
+
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+    PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
+    PFN_vkCreateInstance vkCreateInstance;
+    PFN_vkDestroyInstance vkDestroyInstance;
+    PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
+    PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
+    PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties;
+    PFN_vkGetPhysicalDeviceFeatures vkGetPhysicalDeviceFeatures;
+    PFN_vkGetPhysicalDeviceFormatProperties vkGetPhysicalDeviceFormatProperties;
+    PFN_vkGetPhysicalDeviceQueueFamilyProperties vkGetPhysicalDeviceQueueFamilyProperties;
+    PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
+    PFN_vkCreateDevice vkCreateDevice;
+    PFN_vkGetDeviceQueue vkGetDeviceQueue;
+    PFN_vkCreateFence vkCreateFence;
+    PFN_vkCreateCommandPool vkCreateCommandPool;
+    PFN_vkAllocateCommandBuffers vkAllocateCommandBuffers;
+    PFN_vkGetImageMemoryRequirements vkGetImageMemoryRequirements;
+    PFN_vkCmdCopyImageToBuffer vkCmdCopyImageToBuffer;
+    PFN_vkCreateShaderModule vkCreateShaderModule;
+    PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage;
+    PFN_vkCmdDrawIndirect vkCmdDrawIndirect;
+    PFN_vkCreateImageView vkCreateImageView;
+    PFN_vkCmdDispatch vkCmdDispatch;
+    PFN_vkCmdBindIndexBuffer vkCmdBindIndexBuffer;
+    PFN_vkBindImageMemory vkBindImageMemory;
+    PFN_vkFreeMemory vkFreeMemory;
+    PFN_vkCmdSetViewport vkCmdSetViewport;
+    PFN_vkCmdBindDescriptorSets vkCmdBindDescriptorSets;
+    PFN_vkCmdCopyBuffer vkCmdCopyBuffer;
+    PFN_vkCmdDrawIndexedIndirect vkCmdDrawIndexedIndirect;
+    PFN_vkCmdPushConstants vkCmdPushConstants;
+    PFN_vkUnmapMemory vkUnmapMemory;
+    PFN_vkEndCommandBuffer vkEndCommandBuffer;
+    PFN_vkCreateBuffer vkCreateBuffer;
+    PFN_vkDestroyBuffer vkDestroyBuffer;
+    PFN_vkUpdateDescriptorSets vkUpdateDescriptorSets;
+    PFN_vkCreateRenderPass vkCreateRenderPass;
+    PFN_vkCmdDraw vkCmdDraw;
+    PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers;
+    PFN_vkAllocateMemory vkAllocateMemory;
+    PFN_vkBindBufferMemory vkBindBufferMemory;
+    PFN_vkCreatePipelineLayout vkCreatePipelineLayout;
+    PFN_vkCmdSetScissor vkCmdSetScissor;
+    PFN_vkCmdBindPipeline vkCmdBindPipeline;
+    PFN_vkCreateGraphicsPipelines vkCreateGraphicsPipelines;
+    PFN_vkCreateDescriptorSetLayout vkCreateDescriptorSetLayout;
+    PFN_vkCmdDrawIndexed vkCmdDrawIndexed;
+    PFN_vkCmdEndRenderPass vkCmdEndRenderPass;
+    PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier;
+    PFN_vkCreateDescriptorPool vkCreateDescriptorPool;
+    PFN_vkCreateImage vkCreateImage;
+    PFN_vkCmdBeginRenderPass vkCmdBeginRenderPass;
+    PFN_vkCreateComputePipelines vkCreateComputePipelines;
+    PFN_vkBeginCommandBuffer vkBeginCommandBuffer;
+    PFN_vkCreateFramebuffer vkCreateFramebuffer;
+    PFN_vkMapMemory vkMapMemory;
+    PFN_vkQueueSubmit vkQueueSubmit;
+    PFN_vkAllocateDescriptorSets vkAllocateDescriptorSets;
+    PFN_vkCreateSampler vkCreateSampler;
+    PFN_vkGetBufferMemoryRequirements vkGetBufferMemoryRequirements;
+    PFN_vkWaitForFences vkWaitForFences;
+    PFN_vkResetFences vkResetFences;
 };
 
 struct Image;
 struct Buffer;
 
 struct BufferBinding {
+    PyObject * name;
+    uint32_t binding;
     Buffer * buffer;
     VkDeviceSize size;
     VkBufferUsageFlags usage;
     VkDescriptorType descriptor_type;
+    VkDescriptorBufferInfo descriptor_buffer_info;
+    BufferMode mode;
 };
 
 struct ImageBinding {
+    PyObject * name;
+    uint32_t binding;
     VkBool32 sampled;
     uint32_t image_count;
     Image ** image_array;
@@ -195,7 +268,7 @@ struct RenderPipeline {
     VkBuffer * vertex_attribute_buffer_array;
     VkDeviceSize * vertex_attribute_offset_array;
     VkPipeline pipeline;
-    PyObject * buffer;
+    PyObject * members;
 };
 
 struct ComputePipeline {
@@ -206,6 +279,9 @@ struct ComputePipeline {
     uint32_t image_count;
     BufferBinding * buffer_array;
     ImageBinding * image_array;
+    VkDescriptorSetLayoutBinding * descriptor_binding_array;
+    VkDescriptorPoolSize * descriptor_pool_size_array;
+    VkWriteDescriptorSet * write_descriptor_set_array;
     VkDescriptorSetLayout descriptor_set_layout;
     VkPipelineLayout pipeline_layout;
     VkDescriptorPool descriptor_pool;
@@ -213,7 +289,7 @@ struct ComputePipeline {
     VkShaderModule compute_shader_module;
     VkPipeline pipeline;
     Buffer * uniform_buffer;
-    PyObject * buffer;
+    PyObject * members;
 };
 
 struct Memory {
@@ -277,14 +353,24 @@ struct ImageCreateInfo {
     VkFormat format;
 };
 
+template <typename T>
+T * allocate(uint32_t count) {
+    return (T *)PyMem_Malloc(sizeof(T) * count);
+}
+
+PFN_vkGetInstanceProcAddr get_instance_proc_addr(const char * backend);
+void load_library_methods(Instance * instance);
+void load_instance_methods(Instance * instance);
+void load_device_methods(Instance * instance);
+
 void install_debug_messenger(Instance * instance);
 
 BufferBinding parse_buffer_binding(PyObject * obj);
 ImageBinding parse_image_binding(PyObject * obj);
 
-void execute_framebuffer(VkCommandBuffer command_buffer, Framebuffer * framebuffer);
-void execute_render_pipeline(VkCommandBuffer command_buffer, RenderPipeline * pipeline);
-void execute_compute_pipeline(VkCommandBuffer cmd, ComputePipeline * pipeline);
+void execute_framebuffer(Framebuffer * self);
+void execute_render_pipeline(RenderPipeline * self);
+void execute_compute_pipeline(ComputePipeline * self);
 
 VkCommandBuffer begin_commands(Instance * instance);
 void end_commands(Instance * instance);

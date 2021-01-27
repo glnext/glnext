@@ -246,7 +246,7 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
         &subpass_dependency,
     };
 
-    vkCreateRenderPass(res->instance->device, &render_pass_create_info, NULL, &res->render_pass);
+    self->vkCreateRenderPass(res->instance->device, &render_pass_create_info, NULL, &res->render_pass);
 
     for (uint32_t layer = 0; layer < args.layers; ++layer) {
         uint32_t offset = attachment_count * layer;
@@ -264,7 +264,7 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
             };
 
             VkImageView image_view = NULL;
-            vkCreateImageView(res->instance->device, &image_view_create_info, NULL, &image_view);
+            self->vkCreateImageView(res->instance->device, &image_view_create_info, NULL, &image_view);
             res->image_view_array[offset + i] = image_view;
         }
 
@@ -280,7 +280,7 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
             1,
         };
 
-        vkCreateFramebuffer(res->instance->device, &framebuffer_create_info, NULL, &res->framebuffer_array[layer]);
+        self->vkCreateFramebuffer(res->instance->device, &framebuffer_create_info, NULL, &res->framebuffer_array[layer]);
     }
 
     memset(res->clear_value_array, 0, sizeof(VkClearValue) * attachment_count);
@@ -314,31 +314,31 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
     return res;
 }
 
-void execute_framebuffer(VkCommandBuffer command_buffer, Framebuffer * framebuffer) {
-    for (uint32_t layer = 0; layer < framebuffer->layers; ++layer) {
+void execute_framebuffer(Framebuffer * self) {
+    for (uint32_t layer = 0; layer < self->layers; ++layer) {
         VkRenderPassBeginInfo render_pass_begin_info = {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             NULL,
-            framebuffer->render_pass,
-            framebuffer->framebuffer_array[layer],
-            {{0, 0}, {framebuffer->width, framebuffer->height}},
-            framebuffer->attachment_count,
-            framebuffer->clear_value_array,
+            self->render_pass,
+            self->framebuffer_array[layer],
+            {{0, 0}, {self->width, self->height}},
+            self->attachment_count,
+            self->clear_value_array,
         };
 
-        vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+        self->instance->vkCmdBeginRenderPass(self->instance->command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
-        VkViewport viewport = {0.0f, 0.0f, (float)framebuffer->width, (float)framebuffer->height, 0.0f, 1.0f};
-        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+        VkViewport viewport = {0.0f, 0.0f, (float)self->width, (float)self->height, 0.0f, 1.0f};
+        self->instance->vkCmdSetViewport(self->instance->command_buffer, 0, 1, &viewport);
 
-        VkRect2D scissor = {{0, 0}, {framebuffer->width, framebuffer->height}};
-        vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+        VkRect2D scissor = {{0, 0}, {self->width, self->height}};
+        self->instance->vkCmdSetScissor(self->instance->command_buffer, 0, 1, &scissor);
 
-        for (uint32_t i = 0; i < PyList_Size(framebuffer->render_pipeline_list); ++i) {
-            RenderPipeline * pipeline = (RenderPipeline *)PyList_GetItem(framebuffer->render_pipeline_list, i);
+        for (uint32_t i = 0; i < PyList_Size(self->render_pipeline_list); ++i) {
+            RenderPipeline * pipeline = (RenderPipeline *)PyList_GetItem(self->render_pipeline_list, i);
 
-            vkCmdPushConstants(
-                command_buffer,
+            self->instance->vkCmdPushConstants(
+                self->instance->command_buffer,
                 pipeline->pipeline_layout,
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0,
@@ -346,19 +346,19 @@ void execute_framebuffer(VkCommandBuffer command_buffer, Framebuffer * framebuff
                 &layer
             );
 
-            execute_render_pipeline(command_buffer, pipeline);
+            execute_render_pipeline(pipeline);
         }
 
-        vkCmdEndRenderPass(command_buffer);
+        self->instance->vkCmdEndRenderPass(self->instance->command_buffer);
 
-        for (uint32_t i = 0; i < PyList_Size(framebuffer->compute_pipeline_list); ++i) {
-            ComputePipeline * pipeline = (ComputePipeline *)PyList_GetItem(framebuffer->compute_pipeline_list, i);
-            execute_compute_pipeline(command_buffer, pipeline);
+        for (uint32_t i = 0; i < PyList_Size(self->compute_pipeline_list); ++i) {
+            ComputePipeline * pipeline = (ComputePipeline *)PyList_GetItem(self->compute_pipeline_list, i);
+            execute_compute_pipeline(pipeline);
         }
 
-        if (framebuffer->image_barrier_count) {
-            vkCmdPipelineBarrier(
-                command_buffer,
+        if (self->image_barrier_count) {
+            self->instance->vkCmdPipelineBarrier(
+                self->instance->command_buffer,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 0,
@@ -366,22 +366,22 @@ void execute_framebuffer(VkCommandBuffer command_buffer, Framebuffer * framebuff
                 NULL,
                 0,
                 NULL,
-                framebuffer->image_barrier_count,
-                framebuffer->image_barrier_array
+                self->image_barrier_count,
+                self->image_barrier_array
             );
 
         }
     }
 
-    if (framebuffer->levels > 1) {
+    if (self->levels > 1) {
         // build_mipmaps({
-        //     command_buffer,
-        //     framebuffer->width,
-        //     framebuffer->height,
-        //     framebuffer->levels,
-        //     framebuffer->layers,
-        //     framebuffer->output_count,
-        //     framebuffer->image_array,
+        //     self->instance->command_buffer,
+        //     self->width,
+        //     self->height,
+        //     self->levels,
+        //     self->layers,
+        //     self->output_count,
+        //     self->image_array,
         // });
     }
 }

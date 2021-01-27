@@ -106,11 +106,15 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         bind_buffer(res->buffer_array[i].buffer);
     }
 
+    for (uint32_t i = 0; i < res->buffer_count; ++i) {
+        res->buffer_array[i].descriptor_buffer_info.buffer = res->buffer_array[i].buffer->buffer;
+    }
+
     for (uint32_t i = 0; i < res->image_count; ++i) {
         ImageBinding & image_binding = res->image_array[i];
         for (uint32_t j = 0; j < image_binding.image_count; ++j) {
             VkImageView image_view = NULL;
-            vkCreateImageView(
+            self->vkCreateImageView(
                 self->device,
                 &image_binding.image_view_create_info_array[j],
                 NULL,
@@ -118,7 +122,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
             );
             VkSampler sampler = NULL;
             if (image_binding.sampled) {
-                vkCreateSampler(
+                self->vkCreateSampler(
                     self->device,
                     &image_binding.sampler_create_info_array[j],
                     NULL,
@@ -135,62 +139,55 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         }
     }
 
-    uint32_t descriptor_binding_count = 0;
-    VkDescriptorSetLayoutBinding descriptor_binding_array[64];
-    VkDescriptorPoolSize descriptor_pool_size_array[64];
-    VkDescriptorBufferInfo descriptor_buffer_info_array[64];
-    VkWriteDescriptorSet write_descriptor_set_array[64];
+    uint32_t descriptor_binding_count = res->buffer_count + res->image_count;
+    res->descriptor_binding_array = (VkDescriptorSetLayoutBinding *)PyMem_Malloc(sizeof(VkDescriptorSetLayoutBinding) * descriptor_binding_count);
+    res->descriptor_pool_size_array = (VkDescriptorPoolSize *)PyMem_Malloc(sizeof(VkDescriptorPoolSize) * descriptor_binding_count);
+    res->write_descriptor_set_array = (VkWriteDescriptorSet *)PyMem_Malloc(sizeof(VkWriteDescriptorSet) * descriptor_binding_count);
 
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        uint32_t binding = descriptor_binding_count++;
-        descriptor_binding_array[binding] = {
-            binding,
+        uint32_t binding = res->buffer_array[i].binding;
+        res->descriptor_binding_array[i] = {
+            res->buffer_array[i].binding,
             res->buffer_array[i].descriptor_type,
             1,
             VK_SHADER_STAGE_COMPUTE_BIT,
             NULL,
         };
-        descriptor_pool_size_array[binding] = {
+        res->descriptor_pool_size_array[i] = {
             res->buffer_array[i].descriptor_type,
             1,
         };
-        descriptor_buffer_info_array[binding] = {
-            res->buffer_array[i].buffer->buffer,
-            0,
-            VK_WHOLE_SIZE,
-        };
-        write_descriptor_set_array[binding] = {
+        res->write_descriptor_set_array[i] = {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             NULL,
             NULL,
-            binding,
+            res->buffer_array[i].binding,
             0,
             1,
             res->buffer_array[i].descriptor_type,
             NULL,
-            &descriptor_buffer_info_array[binding],
+            &res->buffer_array[i].descriptor_buffer_info,
             NULL,
         };
     }
 
     for (uint32_t i = 0; i < res->image_count; ++i) {
-        uint32_t binding = descriptor_binding_count++;
-        descriptor_binding_array[binding] = {
-            binding,
+        res->descriptor_binding_array[res->buffer_count + i] = {
+            res->image_array[i].binding,
             res->image_array[i].descriptor_type,
             1,
             VK_SHADER_STAGE_COMPUTE_BIT,
             NULL,
         };
-        descriptor_pool_size_array[binding] = {
+        res->descriptor_pool_size_array[res->buffer_count + i] = {
             res->image_array[i].descriptor_type,
             1,
         };
-        write_descriptor_set_array[binding] = {
+        res->write_descriptor_set_array[res->buffer_count + i] = {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             NULL,
             NULL,
-            binding,
+            res->image_array[i].binding,
             0,
             1,
             res->image_array[i].descriptor_type,
@@ -205,10 +202,10 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         NULL,
         0,
         descriptor_binding_count,
-        descriptor_binding_array,
+        res->descriptor_binding_array,
     };
 
-    vkCreateDescriptorSetLayout(self->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
+    self->vkCreateDescriptorSetLayout(self->device, &descriptor_set_layout_create_info, NULL, &res->descriptor_set_layout);
 
     VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -220,7 +217,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         NULL,
     };
 
-    vkCreatePipelineLayout(self->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
+    self->vkCreatePipelineLayout(self->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
 
     VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -228,10 +225,10 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         0,
         1,
         descriptor_binding_count,
-        descriptor_pool_size_array,
+        res->descriptor_pool_size_array,
     };
 
-    vkCreateDescriptorPool(self->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
+    self->vkCreateDescriptorPool(self->device, &descriptor_pool_create_info, NULL, &res->descriptor_pool);
 
     VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -241,16 +238,16 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         &res->descriptor_set_layout,
     };
 
-    vkAllocateDescriptorSets(self->device, &descriptor_set_allocate_info, &res->descriptor_set);
+    self->vkAllocateDescriptorSets(self->device, &descriptor_set_allocate_info, &res->descriptor_set);
 
     for (uint32_t i = 0; i < descriptor_binding_count; ++i) {
-        write_descriptor_set_array[i].dstSet = res->descriptor_set;
+        res->write_descriptor_set_array[i].dstSet = res->descriptor_set;
     }
 
-    vkUpdateDescriptorSets(
+    self->vkUpdateDescriptorSets(
         self->device,
         descriptor_binding_count,
-        write_descriptor_set_array,
+        res->write_descriptor_set_array,
         NULL,
         NULL
     );
@@ -263,7 +260,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         (uint32_t *)PyBytes_AsString(args.compute_shader),
     };
 
-    vkCreateShaderModule(self->device, &compute_shader_module_create_info, NULL, &res->compute_shader_module);
+    self->vkCreateShaderModule(self->device, &compute_shader_module_create_info, NULL, &res->compute_shader_module);
 
     VkComputePipelineCreateInfo compute_pipeline_create_info = {
         VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -283,12 +280,13 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         0,
     };
 
-    vkCreateComputePipelines(self->device, NULL, 1, &compute_pipeline_create_info, NULL, &res->pipeline);
+    self->vkCreateComputePipelines(self->device, NULL, 1, &compute_pipeline_create_info, NULL, &res->pipeline);
 
-    res->buffer = PyTuple_New(res->buffer_count);
+    res->members = PyDict_New();
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        PyTuple_SetItem(res->buffer, i, (PyObject *)res->buffer_array[i].buffer);
-        Py_INCREF(res->buffer_array[i].buffer);
+        if (res->buffer_array[i].name != Py_None) {
+            PyDict_SetItem(res->members, res->buffer_array[i].name, (PyObject *)res->buffer_array[i].buffer);
+        }
     }
 
     return res;
@@ -315,19 +313,23 @@ ComputePipeline * Instance_meth_compute(Instance * self, PyObject * vargs, PyObj
     return res;
 }
 
-void execute_compute_pipeline(VkCommandBuffer cmd, ComputePipeline * pipeline) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->pipeline);
+void execute_compute_pipeline(ComputePipeline * self) {
+    self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, self->pipeline);
 
-    vkCmdBindDescriptorSets(
-        cmd,
+    self->instance->vkCmdBindDescriptorSets(
+        self->instance->command_buffer,
         VK_PIPELINE_BIND_POINT_COMPUTE,
-        pipeline->pipeline_layout,
+        self->pipeline_layout,
         0,
         1,
-        &pipeline->descriptor_set,
+        &self->descriptor_set,
         0,
         NULL
     );
 
-    vkCmdDispatch(cmd, pipeline->compute_count.x, pipeline->compute_count.x, pipeline->compute_count.z);
+    self->instance->vkCmdDispatch(self->instance->command_buffer, self->compute_count.x, self->compute_count.x, self->compute_count.z);
+}
+
+PyObject * ComputePipeline_subscript(ComputePipeline * self, PyObject * key) {
+    return PyObject_GetItem(self->members, key);
 }

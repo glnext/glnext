@@ -15,5 +15,7 @@ __pycache__
 *.pbd
 *.lib
 *.txt
+*.dll
+*.so
 
 temp_*

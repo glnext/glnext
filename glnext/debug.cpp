@@ -33,7 +33,7 @@ void install_debug_messenger(Instance * instance) {
         instance->log_list,
     };
 
-    PFN_vkVoidFunction proc = vkGetInstanceProcAddr(instance->instance, "vkCreateDebugUtilsMessengerEXT");
+    PFN_vkVoidFunction proc = instance->vkGetInstanceProcAddr(instance->instance, "vkCreateDebugUtilsMessengerEXT");
     PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)proc;
     vkCreateDebugUtilsMessengerEXT(instance->instance, &create_info, NULL, &instance->debug_messenger);
 }

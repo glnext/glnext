@@ -5,12 +5,15 @@
 #include "debug.cpp"
 #include "framebuffer.cpp"
 #include "image.cpp"
+#include "info.cpp"
 #include "instance.cpp"
+#include "loader.cpp"
 #include "render_pipeline.cpp"
 #include "tools.cpp"
 #include "utils.cpp"
 
 PyMethodDef module_methods[] = {
+    {"info", (PyCFunction)glnext_meth_info, METH_VARARGS | METH_KEYWORDS, NULL},
     {"instance", (PyCFunction)glnext_meth_instance, METH_VARARGS | METH_KEYWORDS, NULL},
     {"camera", (PyCFunction)glnext_meth_camera, METH_VARARGS | METH_KEYWORDS, NULL},
     {"rgba", (PyCFunction)glnext_meth_rgba, METH_VARARGS | METH_KEYWORDS, NULL},
@@ -56,12 +59,6 @@ PyMemberDef Framebuffer_members[] = {
 
 PyMemberDef RenderPipeline_members[] = {
     {"vertex_buffer", T_OBJECT_EX, offsetof(RenderPipeline, vertex_buffer), READONLY, NULL},
-    {"buffer", T_OBJECT_EX, offsetof(RenderPipeline, buffer), READONLY, NULL},
-    {},
-};
-
-PyMemberDef ComputePipeline_members[] = {
-    {"buffer", T_OBJECT_EX, offsetof(ComputePipeline, buffer), READONLY, NULL},
     {},
 };
 
@@ -85,12 +82,13 @@ PyType_Slot Framebuffer_slots[] = {
 
 PyType_Slot RenderPipeline_slots[] = {
     {Py_tp_members, RenderPipeline_members},
+    {Py_mp_subscript, RenderPipeline_subscript},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
 
 PyType_Slot ComputePipeline_slots[] = {
-    {Py_tp_members, ComputePipeline_members},
+    {Py_mp_subscript, ComputePipeline_subscript},
     {Py_tp_dealloc, default_dealloc},
     {},
 };

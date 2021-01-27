@@ -9,6 +9,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         "application_version",
         "engine_name",
         "engine_version",
+        "backend",
         "layers",
         "debug",
         NULL,
@@ -16,10 +17,11 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 
     struct {
         uint32_t physical_device = 0;
-        const char * application_name = "application";
+        const char * application_name = NULL;
         uint32_t application_version = 0;
-        const char * engine_name = "engine";
+        const char * engine_name = NULL;
         uint32_t engine_version = 0;
+        const char * backend = NULL;
         PyObject * layers = Py_None;
         VkBool32 debug = false;
     } args;
@@ -27,13 +29,14 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$IsIsIOp",
+        "|$IzIzIzOp",
         keywords,
         &args.physical_device,
         &args.application_name,
         &args.application_version,
         &args.engine_name,
         &args.engine_version,
+        &args.backend,
         &args.layers,
         &args.debug
     );
@@ -44,6 +47,13 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 
     if (args.layers == Py_None) {
         args.layers = state->empty_list;
+    }
+
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = get_instance_proc_addr(args.backend);
+
+    if (!vkGetInstanceProcAddr) {
+        PyErr_Format(PyExc_RuntimeError, "cannot load backend");
+        return NULL;
     }
 
     Instance * res = PyObject_New(Instance, state->Instance_type);
@@ -96,6 +106,9 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         instance_extension_array[instance_extension_count++] = "VK_EXT_debug_utils";
     }
 
+    res->vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    load_library_methods(res);
+
     VkInstanceCreateInfo instance_create_info = {
         VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         NULL,
@@ -107,13 +120,14 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         instance_extension_array,
     };
 
-    res->instance = NULL;
-    vkCreateInstance(&instance_create_info, NULL, &res->instance);
+    res->vkCreateInstance(&instance_create_info, NULL, &res->instance);
 
     if (!res->instance) {
         PyErr_Format(PyExc_RuntimeError, "cannot create instance");
         return NULL;
     }
+
+    load_instance_methods(res);
 
     if (args.debug) {
         install_debug_messenger(res);
@@ -121,8 +135,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 
     uint32_t physical_device_count = 0;
     VkPhysicalDevice physical_device_array[64] = {};
-    vkEnumeratePhysicalDevices(res->instance, &physical_device_count, NULL);
-    vkEnumeratePhysicalDevices(res->instance, &physical_device_count, physical_device_array);
+    res->vkEnumeratePhysicalDevices(res->instance, &physical_device_count, NULL);
+    res->vkEnumeratePhysicalDevices(res->instance, &physical_device_count, physical_device_array);
     res->physical_device = physical_device_array[args.physical_device];
 
     if (!res->physical_device) {
@@ -131,10 +145,10 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     }
 
     VkPhysicalDeviceMemoryProperties device_memory_properties = {};
-    vkGetPhysicalDeviceMemoryProperties(res->physical_device, &device_memory_properties);
+    res->vkGetPhysicalDeviceMemoryProperties(res->physical_device, &device_memory_properties);
 
     VkPhysicalDeviceFeatures supported_features = {};
-    vkGetPhysicalDeviceFeatures(res->physical_device, &supported_features);
+    res->vkGetPhysicalDeviceFeatures(res->physical_device, &supported_features);
 
     res->host_memory_type_index = 0;
     for (uint32_t i = 0; i < device_memory_properties.memoryTypeCount; ++i) {
@@ -157,7 +171,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     VkFormat depth_formats[] = {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
     for (uint32_t i = 0; i < 3; ++i) {
         VkFormatProperties format_properties = {};
-        vkGetPhysicalDeviceFormatProperties(res->physical_device, depth_formats[i], &format_properties);
+        res->vkGetPhysicalDeviceFormatProperties(res->physical_device, depth_formats[i], &format_properties);
         if (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
             res->depth_format = depth_formats[i];
         }
@@ -165,8 +179,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 
     uint32_t queue_family_properties_count = 0;
     VkQueueFamilyProperties queue_family_properties_array[64];
-    vkGetPhysicalDeviceQueueFamilyProperties(res->physical_device, &queue_family_properties_count, NULL);
-    vkGetPhysicalDeviceQueueFamilyProperties(res->physical_device, &queue_family_properties_count, queue_family_properties_array);
+    res->vkGetPhysicalDeviceQueueFamilyProperties(res->physical_device, &queue_family_properties_count, NULL);
+    res->vkGetPhysicalDeviceQueueFamilyProperties(res->physical_device, &queue_family_properties_count, queue_family_properties_array);
 
     res->queue_family_index = 0;
     for (uint32_t i = 0; i < queue_family_properties_count; ++i) {
@@ -204,18 +218,19 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         &physical_device_features,
     };
 
-    res->device = NULL;
-    vkCreateDevice(res->physical_device, &device_create_info, NULL, &res->device);
+    res->vkCreateDevice(res->physical_device, &device_create_info, NULL, &res->device);
 
     if (!res->device) {
         PyErr_Format(PyExc_RuntimeError, "cannot create device");
         return NULL;
     }
 
-    vkGetDeviceQueue(res->device, res->queue_family_index, 0, &res->queue);
+    load_device_methods(res);
+
+    res->vkGetDeviceQueue(res->device, res->queue_family_index, 0, &res->queue);
 
     VkFenceCreateInfo fence_create_info = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, NULL, 0};
-    vkCreateFence(res->device, &fence_create_info, NULL, &res->fence);
+    res->vkCreateFence(res->device, &fence_create_info, NULL, &res->fence);
 
     VkCommandPoolCreateInfo command_pool_create_info = {
         VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -224,7 +239,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         res->queue_family_index,
     };
 
-    vkCreateCommandPool(res->device, &command_pool_create_info, NULL, &res->command_pool);
+    res->vkCreateCommandPool(res->device, &command_pool_create_info, NULL, &res->command_pool);
 
     VkCommandBufferAllocateInfo command_buffer_allocate_info = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -234,19 +249,23 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         1,
     };
 
-    vkAllocateCommandBuffers(res->device, &command_buffer_allocate_info, &res->command_buffer);
+    res->vkAllocateCommandBuffers(res->device, &command_buffer_allocate_info, &res->command_buffer);
 
     return res;
 }
 
 PyObject * Instance_meth_run(Instance * self) {
-    VkCommandBuffer command_buffer = begin_commands(self);
+    begin_commands(self);
 
     for (uint32_t i = 0; i < PyList_Size(self->task_list); ++i) {
         PyObject * task = PyList_GetItem(self->task_list, i);
         if (Py_TYPE(task) == self->state->Framebuffer_type) {
             Framebuffer * framebuffer = (Framebuffer *)PyList_GetItem(self->task_list, i);
-            execute_framebuffer(command_buffer, framebuffer);
+            execute_framebuffer(framebuffer);
+        }
+        if (Py_TYPE(task) == self->state->ComputePipeline_type) {
+            ComputePipeline * pipeline = (ComputePipeline *)PyList_GetItem(self->task_list, i);
+            execute_compute_pipeline(pipeline);
         }
     }
 

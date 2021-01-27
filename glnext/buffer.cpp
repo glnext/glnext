@@ -7,7 +7,7 @@ PyObject * Buffer_meth_read(Buffer * self) {
     VkCommandBuffer command_buffer = begin_commands(self->instance);
 
     VkBufferCopy copy = {0, 0, self->size};
-    vkCmdCopyBuffer(
+    self->instance->vkCmdCopyBuffer(
         command_buffer,
         self->buffer,
         temp.buffer,
@@ -47,7 +47,7 @@ PyObject * Buffer_meth_write(Buffer * self, PyObject * arg) {
     VkCommandBuffer command_buffer = begin_commands(self->instance);
 
     VkBufferCopy copy = {0, 0, self->size};
-    vkCmdCopyBuffer(
+    self->instance->vkCmdCopyBuffer(
         command_buffer,
         temp.buffer,
         self->buffer,

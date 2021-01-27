@@ -23,11 +23,10 @@ if target == 'windows':
     # extra_link_args.append('/DEBUG:FULL')
     include_dirs.append(os.path.join(os.getenv('VULKAN_SDK'), 'Include'))
     library_dirs.append(os.path.join(os.getenv('VULKAN_SDK'), 'Lib'))
-    libraries.append('vulkan-1')
 
 if target == 'linux':
     extra_compile_args.append('-fpermissive')
-    libraries.append('vulkan')
+    libraries.append('dl')
 
 glnext = Extension(
     name='glnext',
