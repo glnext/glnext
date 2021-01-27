@@ -1,3 +1,4 @@
 recursive-include glnext *.cpp *.hpp
+recursive-include include *.h
 include README.md
 include LICENSE

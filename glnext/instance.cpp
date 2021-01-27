@@ -11,6 +11,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         "engine_version",
         "backend",
         "layers",
+        "headless",
         "debug",
         NULL,
     };
@@ -23,13 +24,14 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         uint32_t engine_version = 0;
         const char * backend = NULL;
         PyObject * layers = Py_None;
+        VkBool32 headless = false;
         VkBool32 debug = false;
     } args;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$IzIzIzOp",
+        "|$IzIzIzOpp",
         keywords,
         &args.physical_device,
         &args.application_name,
@@ -38,6 +40,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         &args.engine_version,
         &args.backend,
         &args.layers,
+        &args.headless,
         &args.debug
     );
 
@@ -97,9 +100,11 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         instance_layer_array[instance_layer_count++] = PyUnicode_AsUTF8(PyList_GetItem(args.layers, i));
     }
 
-    // instance_extension_array[instance_extension_count++] = SURFACE_EXTENSION;
-    // instance_extension_array[instance_extension_count++] = "VK_KHR_surface";
-    // device_extension_array[device_extension_count++] = "VK_KHR_swapchain";
+    if (!args.headless) {
+        instance_extension_array[instance_extension_count++] = SURFACE_EXTENSION;
+        instance_extension_array[instance_extension_count++] = "VK_KHR_surface";
+        device_extension_array[device_extension_count++] = "VK_KHR_swapchain";
+    }
 
     if (args.debug) {
         instance_layer_array[instance_layer_count++] = "VK_LAYER_KHRONOS_validation";

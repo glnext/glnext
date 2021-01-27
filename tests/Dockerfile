@@ -7,6 +7,7 @@ ENV VK_ICD_FILENAMES=/swiftshader/vk_swiftshader_icd.json PYTHONUNBUFFERED=1
 COPY swiftshader /swiftshader
 
 WORKDIR /build
+COPY include /build/include
 COPY setup.py MANIFEST.in README.md LICENSE /build/
 COPY glnext /build/glnext
 RUN python3 setup.py sdist
