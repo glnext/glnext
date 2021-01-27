@@ -4,9 +4,9 @@ from PIL import Image
 
 instance = glnext.instance()
 
-renderer = instance.render_set((512, 512))
+framebuffer = instance.framebuffer((512, 512))
 
-pipeline = renderer.pipeline(
+pipeline = framebuffer.render(
     vertex_shader=glsl('''
         #version 450
         #pragma shader_stage(vertex)
@@ -47,16 +47,15 @@ pipeline = renderer.pipeline(
     vertex_count=3,
     instance_count=5,
 )
-pipeline.update(
-    instance_buffer=glnext.pack([
-        -0.5, -0.5,
-        0.5, -0.5,
-        -0.5, 0.5,
-        0.5, 0.5,
-        0.0, 0.0,
-    ]),
-)
 
-instance.render()
-data = renderer.output[0].read()
+pipeline['instance_buffer'].write(glnext.pack([
+    -0.5, -0.5,
+    0.5, -0.5,
+    -0.5, 0.5,
+    0.5, 0.5,
+    0.0, 0.0,
+]))
+
+instance.run()
+data = framebuffer.output[0].read()
 Image.frombuffer('RGB', (512, 512), data, 'raw', 'BGRX', 0, -1).show()

@@ -2,14 +2,16 @@ import glnext
 from glnext_compiler import glsl
 from PIL import Image
 
-instance = glnext.instance(layers=['VK_LAYER_KHRONOS_validation'])
+instance = glnext.instance()
 
-compute = instance.compute_set(
+framebuffer = instance.framebuffer((512, 512), compute=True)
+
+compute = framebuffer.compute(
+    compute_count=(512, 512),
     compute_shader=glsl('''
         #version 450
         #pragma shader_stage(compute)
 
-        layout (local_size_x = 16, local_size_y = 16) in;
         layout (binding = 0, rgba8) uniform image2D Result;
 
         void main() {
@@ -18,9 +20,15 @@ compute = instance.compute_set(
             imageStore(Result, ivec2(gl_GlobalInvocationID.xy), vec4(color, 1.0));
         }
     '''),
-    size=(512, 512),
+    images=[
+        {
+            'binding': 0,
+            'type': 'storage_image',
+            'image': framebuffer.output[0],
+        },
+    ],
 )
 
-instance.render()
-data = compute.output[0].read()
+instance.run()
+data = framebuffer.output[0].read()
 Image.frombuffer('RGB', (512, 512), data, 'raw', 'RGBX', 0, -1).show()

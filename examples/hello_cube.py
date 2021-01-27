@@ -4,11 +4,11 @@ from PIL import Image
 
 from cube_mesh import white_cube
 
-instance = glnext.instance(layers=['VK_LAYER_KHRONOS_validation'])
+instance = glnext.instance()
 
-renderer = instance.render_set((512, 512), uniform_buffer=64)
+framebuffer = instance.framebuffer((512, 512))
 
-pipeline = renderer.pipeline(
+pipeline = framebuffer.render(
     vertex_shader=glsl('''
         #version 450
         #pragma shader_stage(vertex)
@@ -48,11 +48,19 @@ pipeline = renderer.pipeline(
     '''),
     vertex_format='3f 3f 4f',
     vertex_count=36,
+    buffers=[
+        {
+            'binding': 0,
+            'name': 'uniform_buffer',
+            'type': 'uniform_buffer',
+            'size': 64 * 1024,
+        },
+    ],
 )
 
-renderer.update(uniform_buffer=glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0)))
-pipeline.update(vertex_buffer=white_cube)
+pipeline['uniform_buffer'].write(glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0)))
+pipeline['vertex_buffer'].write(white_cube)
 
-instance.render()
-data = renderer.output[0].read()
+instance.run()
+data = framebuffer.output[0].read()
 Image.frombuffer('RGB', (512, 512), data, 'raw', 'BGRX', 0, -1).show()

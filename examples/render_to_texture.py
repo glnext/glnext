@@ -4,9 +4,9 @@ from PIL import Image
 
 instance = glnext.instance()
 
-triangle_renderer = instance.render_set((512, 512), mode='texture')
+triangle_framebuffer = instance.framebuffer((512, 512), mode='texture')
 
-triangle_pipeline = triangle_renderer.pipeline(
+triangle_pipeline = triangle_framebuffer.render(
     vertex_shader=glsl('''
         #version 450
         #pragma shader_stage(vertex)
@@ -44,11 +44,11 @@ triangle_pipeline = triangle_renderer.pipeline(
     vertex_count=3,
 )
 
-sampler = instance.sampler(triangle_renderer.output[0])
+sampler = instance.sampler(triangle_framebuffer.output[0])
 
-renderer = instance.render_set((512, 512))
+framebuffer = instance.framebuffer((512, 512))
 
-pipeline = renderer.pipeline(
+pipeline = framebuffer.render(
     vertex_shader=glsl('''
         #version 450
         #pragma shader_stage(vertex)
@@ -89,6 +89,6 @@ pipeline.update(
     ]),
 )
 
-instance.render()
-data = renderer.output[0].read()
+instance.run()
+data = framebuffer.output[0].read()
 Image.frombuffer('RGB', (512, 512), data, 'raw', 'BGRX', 0, -1).show()
