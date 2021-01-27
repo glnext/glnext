@@ -10,21 +10,30 @@
 #ifdef BUILD_WINDOWS
 #include <Windows.h>
 #include <vulkan/vulkan_win32.h>
-#define SURFACE_EXTENSION "VK_KHR_win32_surface"
-#endif
-
-#ifdef BUILD_DARWIN
-#include <QuartzCore/CAMetalLayer.h>
-#include <vulkan/vulkan_metal.h>
-#define SURFACE_EXTENSION "VK_EXT_metal_surface"
+#define DEFAULT_SURFACE "VK_KHR_win32_surface"
+#define DEFAULT_BACKEND "vulkan-1.dll"
 #endif
 
 #ifdef BUILD_LINUX
 #include <dlfcn.h>
 #include <X11/Xlib.h>
 #include <vulkan/vulkan_xlib.h>
-#define SURFACE_EXTENSION "VK_KHR_xlib_surface"
+#define DEFAULT_SURFACE "VK_KHR_xlib_surface"
+#define DEFAULT_BACKEND "libvulkan.so"
 #endif
+
+#ifdef BUILD_DARWIN
+#include <QuartzCore/CAMetalLayer.h>
+#include <vulkan/vulkan_metal.h>
+#define DEFAULT_SURFACE "VK_EXT_metal_surface"
+#define DEFAULT_BACKEND NULL
+#endif
+
+typedef VkResult (VKAPI_PTR * PFN_vkCreateWin32SurfaceKHR)(VkInstance, const struct VkWin32SurfaceCreateInfoKHR *, const VkAllocationCallbacks *, VkSurfaceKHR *);
+typedef VkResult (VKAPI_PTR * PFN_vkCreateXlibSurfaceKHR)(VkInstance, const struct VkXlibSurfaceCreateInfoKHR *, const VkAllocationCallbacks *, VkSurfaceKHR *);
+typedef VkResult (VKAPI_PTR * PFN_vkCreateXcbSurfaceKHR)(VkInstance, const struct VkXcbSurfaceCreateInfoKHR *, const VkAllocationCallbacks *, VkSurfaceKHR *);
+typedef VkResult (VKAPI_PTR * PFN_vkCreateWaylandSurfaceKHR)(VkInstance, const struct VkWaylandSurfaceCreateInfoKHR *, const VkAllocationCallbacks *, VkSurfaceKHR *);
+typedef VkResult (VKAPI_PTR * PFN_vkCreateMetalSurfaceEXT)(VkInstance, const struct VkMetalSurfaceCreateInfoEXT *, const VkAllocationCallbacks *, VkSurfaceKHR *);
 
 enum ImageMode {
     IMG_PROTECTED,
@@ -66,7 +75,7 @@ struct Presenter {
     VkPipelineStageFlags * wait_stage_array;
     VkSemaphore * semaphore_array;
     VkImage * image_source_array;
-    VkImageCopy * image_copy_array;
+    VkImageBlit * image_blit_array;
     uint32_t * image_count_array;
     VkImage ** image_array;
     VkResult * result_array;
@@ -124,7 +133,6 @@ struct Instance {
     ModuleState * state;
 
     PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
-    PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
     PFN_vkCreateInstance vkCreateInstance;
     PFN_vkDestroyInstance vkDestroyInstance;
     PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
@@ -185,6 +193,25 @@ struct Instance {
     PFN_vkGetBufferMemoryRequirements vkGetBufferMemoryRequirements;
     PFN_vkWaitForFences vkWaitForFences;
     PFN_vkResetFences vkResetFences;
+    PFN_vkCreateSemaphore vkCreateSemaphore;
+    PFN_vkDestroySemaphore vkDestroySemaphore;
+    PFN_vkCmdCopyImage vkCmdCopyImage;
+    PFN_vkCmdBlitImage vkCmdBlitImage;
+
+    PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupportKHR;
+    PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormatsKHR;
+    PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilitiesKHR;
+    PFN_vkAcquireNextImageKHR vkAcquireNextImageKHR;
+    PFN_vkQueuePresentKHR vkQueuePresentKHR;
+    PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR;
+    PFN_vkGetSwapchainImagesKHR vkGetSwapchainImagesKHR;
+    PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR;
+    PFN_vkCreateXlibSurfaceKHR vkCreateXlibSurfaceKHR;
+    PFN_vkCreateXcbSurfaceKHR vkCreateXcbSurfaceKHR;
+    PFN_vkCreateWaylandSurfaceKHR vkCreateWaylandSurfaceKHR;
+    PFN_vkCreateMetalSurfaceEXT vkCreateMetalSurfaceEXT;
+    PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR;
+    PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
 };
 
 struct Image;
@@ -377,6 +404,7 @@ void execute_compute_pipeline(ComputePipeline * self);
 
 VkCommandBuffer begin_commands(Instance * instance);
 void end_commands(Instance * instance);
+void end_commands_with_present(Instance * instance);
 
 Memory * new_memory(Instance * instance, VkBool32 host = false);
 Memory * get_memory(Instance * instance, PyObject * memory);
@@ -398,3 +426,6 @@ void free_temp_buffer(Instance * instance, HostBuffer * temp);
 VkPrimitiveTopology get_topology(PyObject * name);
 ImageMode get_image_mode(PyObject * name);
 Format get_format(PyObject * name);
+
+void presenter_resize(Presenter * presenter);
+void presenter_remove(Presenter * presenter, uint32_t index);

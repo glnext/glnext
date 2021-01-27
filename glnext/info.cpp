@@ -21,6 +21,7 @@ PyObject * glnext_meth_info(PyObject * self, PyObject * vargs, PyObject * kwargs
     #define load(name) PFN_ ## name name = (PFN_ ## name)vkGetInstanceProcAddr(instance, #name)
 
     load(vkEnumerateInstanceLayerProperties);
+    load(vkEnumerateInstanceExtensionProperties);
     load(vkCreateInstance);
 
     VkInstanceCreateInfo instance_create_info = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
@@ -44,6 +45,18 @@ PyObject * glnext_meth_info(PyObject * self, PyObject * vargs, PyObject * kwargs
 
     PyMem_Free(layer_array);
 
+    uint32_t extension_count = 0;
+    vkEnumerateInstanceExtensionProperties(NULL, &extension_count, NULL);
+    VkExtensionProperties * extension_array = allocate<VkExtensionProperties>(extension_count);
+    vkEnumerateInstanceExtensionProperties(NULL, &extension_count, extension_array);
+
+    PyObject * extensions = PyList_New(extension_count);
+    for (uint32_t i = 0; i < extension_count; ++i) {
+        PyList_SetItem(extensions, i, PyUnicode_FromString(extension_array[i].extensionName));
+    }
+
+    PyMem_Free(extension_array);
+
     uint32_t physical_device_count = 0;
     vkEnumeratePhysicalDevices(instance, &physical_device_count, NULL);
 
@@ -59,6 +72,6 @@ PyObject * glnext_meth_info(PyObject * self, PyObject * vargs, PyObject * kwargs
     }
 
     vkDestroyInstance(instance, NULL);
-    return Py_BuildValue("{sNsN}", "layers", layers, "phyiscal_devices", phyiscal_devices);
+    return Py_BuildValue("{sNsNsN}", "layers", layers, "extensions", extensions, "phyiscal_devices", phyiscal_devices);
     return NULL;
 }

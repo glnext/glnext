@@ -9,6 +9,7 @@
 #include "instance.cpp"
 #include "loader.cpp"
 #include "render_pipeline.cpp"
+#include "surface.cpp"
 #include "tools.cpp"
 #include "utils.cpp"
 
@@ -25,6 +26,7 @@ PyMethodDef Instance_methods[] = {
     {"framebuffer", (PyCFunction)Instance_meth_framebuffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"compute", (PyCFunction)Instance_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
     {"run", (PyCFunction)Instance_meth_run, METH_NOARGS, NULL},
     {},
 };
@@ -139,6 +141,8 @@ int module_exec(PyObject * self) {
     state->one_int_str = PyUnicode_FromString("1i");
     state->texture_str = PyUnicode_FromString("texture");
     state->output_str = PyUnicode_FromString("output");
+
+    PyModule_AddStringConstant(self, "default_surface", DEFAULT_SURFACE);
 
     return 0;
 }

@@ -10,8 +10,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         "engine_name",
         "engine_version",
         "backend",
+        "surface",
         "layers",
-        "headless",
         "debug",
         NULL,
     };
@@ -23,15 +23,15 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         const char * engine_name = NULL;
         uint32_t engine_version = 0;
         const char * backend = NULL;
+        const char * surface = NULL;
         PyObject * layers = Py_None;
-        VkBool32 headless = false;
         VkBool32 debug = false;
     } args;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$IzIzIzOpp",
+        "|$IzIzIzzOp",
         keywords,
         &args.physical_device,
         &args.application_name,
@@ -39,8 +39,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         &args.engine_name,
         &args.engine_version,
         &args.backend,
+        &args.surface,
         &args.layers,
-        &args.headless,
         &args.debug
     );
 
@@ -100,8 +100,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         instance_layer_array[instance_layer_count++] = PyUnicode_AsUTF8(PyList_GetItem(args.layers, i));
     }
 
-    if (!args.headless) {
-        instance_extension_array[instance_extension_count++] = SURFACE_EXTENSION;
+    if (args.surface) {
+        instance_extension_array[instance_extension_count++] = args.surface;
         instance_extension_array[instance_extension_count++] = "VK_KHR_surface";
         device_extension_array[device_extension_count++] = "VK_KHR_swapchain";
     }
@@ -274,6 +274,10 @@ PyObject * Instance_meth_run(Instance * self) {
         }
     }
 
-    end_commands(self);
+    if (self->presenter.surface_count) {
+        end_commands_with_present(self);
+    } else {
+        end_commands(self);
+    }
     Py_RETURN_NONE;
 }

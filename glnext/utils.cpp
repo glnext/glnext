@@ -32,6 +32,143 @@ void end_commands(Instance * self) {
     self->vkResetFences(self->device, 1, &self->fence);
 }
 
+void end_commands_with_present(Instance * self) {
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        self->vkAcquireNextImageKHR(
+            self->device,
+            self->presenter.swapchain_array[i],
+            UINT64_MAX,
+            self->presenter.semaphore_array[i],
+            NULL,
+            &self->presenter.index_array[i]
+        );
+    }
+
+    if (self->presenter.surface_count) {
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[64];
+
+        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->presenter.image_array[i][self->presenter.index_array[i]],
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            };
+        }
+
+        self->vkCmdPipelineBarrier(
+            self->command_buffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        self->vkCmdBlitImage(
+            self->command_buffer,
+            self->presenter.image_source_array[i],
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            self->presenter.image_array[i][self->presenter.index_array[i]],
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &self->presenter.image_blit_array[i],
+            VK_FILTER_NEAREST
+        );
+    }
+
+    if (self->presenter.surface_count) {
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[64];
+
+        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->presenter.image_array[i][self->presenter.index_array[i]],
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            };
+        }
+
+        self->vkCmdPipelineBarrier(
+            self->command_buffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+
+    self->vkEndCommandBuffer(self->command_buffer);
+
+    VkSubmitInfo submit_info = {
+        VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        NULL,
+        self->presenter.surface_count,
+        self->presenter.semaphore_array,
+        self->presenter.wait_stage_array,
+        1,
+        &self->command_buffer,
+        0,
+        NULL,
+    };
+
+    self->vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
+    self->vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
+    self->vkResetFences(self->device, 1, &self->fence);
+
+    if (self->presenter.surface_count) {
+        VkPresentInfoKHR present_info = {
+            VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            NULL,
+            0,
+            NULL,
+            self->presenter.surface_count,
+            self->presenter.swapchain_array,
+            self->presenter.index_array,
+            self->presenter.result_array,
+        };
+
+        self->vkQueuePresentKHR(self->queue, &present_info);
+
+        uint32_t idx = 0;
+        while (idx < self->presenter.surface_count) {
+            if (self->presenter.result_array[idx] == VK_ERROR_OUT_OF_DATE_KHR) {
+                self->vkDestroySemaphore(self->device, self->presenter.semaphore_array[idx], NULL);
+                self->vkDestroySwapchainKHR(self->device, self->presenter.swapchain_array[idx], NULL);
+                self->vkDestroySurfaceKHR(self->instance, self->presenter.surface_array[idx], NULL);
+                presenter_remove(&self->presenter, idx);
+                continue;
+            }
+            idx += 1;
+        }
+    }
+}
+
 Memory * new_memory(Instance * self, VkBool32 host) {
     Memory * res = PyObject_New(Memory, self->state->Memory_type);
     res->instance = self;
@@ -540,6 +677,10 @@ Format get_format(PyObject * name) {
     if (!strcmp(s, "2p")) return {VK_FORMAT_R8G8_UNORM, 2, pack_byte_2, 2};
     if (!strcmp(s, "3p")) return {VK_FORMAT_R8G8B8_UNORM, 3, pack_byte_3, 3};
     if (!strcmp(s, "4p")) return {VK_FORMAT_R8G8B8A8_UNORM, 4, pack_byte_4, 4};
+    if (!strcmp(s, "1s")) return {VK_FORMAT_R8_SRGB, 1, pack_byte_1, 1};
+    if (!strcmp(s, "2s")) return {VK_FORMAT_R8G8_SRGB, 2, pack_byte_2, 2};
+    if (!strcmp(s, "3s")) return {VK_FORMAT_R8G8B8_SRGB, 3, pack_byte_3, 3};
+    if (!strcmp(s, "4s")) return {VK_FORMAT_R8G8B8A8_SRGB, 4, pack_byte_4, 4};
     if (!strcmp(s, "1x")) return {VK_FORMAT_UNDEFINED, 1, pack_pad, 0};
     if (!strcmp(s, "2x")) return {VK_FORMAT_UNDEFINED, 2, pack_pad, 0};
     if (!strcmp(s, "3x")) return {VK_FORMAT_UNDEFINED, 3, pack_pad, 0};
@@ -549,4 +690,40 @@ Format get_format(PyObject * name) {
     if (!strcmp(s, "16x")) return {VK_FORMAT_UNDEFINED, 16, pack_pad, 0};
     PyErr_Format(PyExc_ValueError, "format");
     return {};
+}
+
+template <typename T>
+void realloc_array(T ** array, uint32_t size) {
+    *array = (T *)PyMem_Realloc(*array, sizeof(T) * size);
+}
+
+void presenter_resize(Presenter * self) {
+    realloc_array(&self->surface_array, self->surface_count);
+    realloc_array(&self->swapchain_array, self->surface_count);
+    realloc_array(&self->wait_stage_array, self->surface_count);
+    realloc_array(&self->semaphore_array, self->surface_count);
+    realloc_array(&self->image_source_array, self->surface_count);
+    realloc_array(&self->image_blit_array, self->surface_count);
+    realloc_array(&self->image_count_array, self->surface_count);
+    realloc_array(&self->image_array, self->surface_count);
+    realloc_array(&self->result_array, self->surface_count);
+    realloc_array(&self->index_array, self->surface_count);
+}
+
+void presenter_remove(Presenter * self, uint32_t index) {
+    PyMem_Free(self->image_array[index]);
+    self->surface_count -= 1;
+    for (uint32_t i = index; i < self->surface_count; ++i) {
+        self->surface_array[i] = self->surface_array[i + 1];
+        self->swapchain_array[i] = self->swapchain_array[i + 1];
+        self->wait_stage_array[i] = self->wait_stage_array[i + 1];
+        self->semaphore_array[i] = self->semaphore_array[i + 1];
+        self->image_source_array[i] = self->image_source_array[i + 1];
+        self->image_blit_array[i] = self->image_blit_array[i + 1];
+        self->image_count_array[i] = self->image_count_array[i + 1];
+        self->image_array[i] = self->image_array[i + 1];
+        self->result_array[i] = self->result_array[i + 1];
+        self->index_array[i] = self->index_array[i + 1];
+    }
+    presenter_resize(self);
 }
