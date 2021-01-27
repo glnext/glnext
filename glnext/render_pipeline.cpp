@@ -236,18 +236,18 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         }
     }
 
-    res->vertex_attribute_count = vertex_attribute_count;
-    res->vertex_attribute_buffer_array = (VkBuffer *)PyMem_Malloc(sizeof(VkBuffer) * vertex_attribute_count);
-    res->vertex_attribute_offset_array = (VkDeviceSize *)PyMem_Malloc(sizeof(VkDeviceSize) * vertex_attribute_count);
+    res->attribute_count = attribute_count;
+    res->attribute_buffer_array = (VkBuffer *)PyMem_Malloc(sizeof(VkBuffer) * attribute_count);
+    res->attribute_offset_array = (VkDeviceSize *)PyMem_Malloc(sizeof(VkDeviceSize) * attribute_count);
 
     for (uint32_t i = 0; i < vertex_attribute_count; ++i) {
-        res->vertex_attribute_buffer_array[i] = res->vertex_buffer->buffer;
-        res->vertex_attribute_offset_array[i] = 0;
+        res->attribute_buffer_array[i] = res->vertex_buffer->buffer;
+        res->attribute_offset_array[i] = 0;
     }
 
     for (uint32_t i = vertex_attribute_count; i < attribute_count; ++i) {
-        res->vertex_attribute_buffer_array[i] = res->instance_buffer->buffer;
-        res->vertex_attribute_offset_array[i] = 0;
+        res->attribute_buffer_array[i] = res->instance_buffer->buffer;
+        res->attribute_offset_array[i] = 0;
     }
 
     uint32_t descriptor_binding_count = 0;
@@ -562,13 +562,13 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 void execute_render_pipeline(RenderPipeline * self) {
     self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->pipeline);
 
-    if (self->vertex_attribute_count) {
+    if (self->attribute_count) {
         self->instance->vkCmdBindVertexBuffers(
             self->instance->command_buffer,
             0,
-            self->vertex_attribute_count,
-            self->vertex_attribute_buffer_array,
-            self->vertex_attribute_offset_array
+            self->attribute_count,
+            self->attribute_buffer_array,
+            self->attribute_offset_array
         );
     }
 

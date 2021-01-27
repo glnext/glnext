@@ -264,9 +264,9 @@ struct RenderPipeline {
     VkDescriptorSet descriptor_set;
     VkShaderModule vertex_shader_module;
     VkShaderModule fragment_shader_module;
-    uint32_t vertex_attribute_count;
-    VkBuffer * vertex_attribute_buffer_array;
-    VkDeviceSize * vertex_attribute_offset_array;
+    uint32_t attribute_count;
+    VkBuffer * attribute_buffer_array;
+    VkDeviceSize * attribute_offset_array;
     VkPipeline pipeline;
     PyObject * members;
 };
