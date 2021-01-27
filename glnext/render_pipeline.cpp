@@ -68,6 +68,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     RenderPipeline * res = PyObject_New(RenderPipeline, self->instance->state->RenderPipeline_type);
 
     res->instance = self->instance;
+    res->members = PyDict_New();
+
     res->vertex_count = args.vertex_count;
     res->instance_count = args.instance_count;
     res->index_count = args.index_count;
@@ -150,6 +152,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
             vstride * args.vertex_count,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         });
+        PyDict_SetItemString(res->members, "vertex_buffer", (PyObject *)res->vertex_buffer);
     }
 
     if (istride && args.instance_count) {
@@ -159,6 +162,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
             istride * args.instance_count,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         });
+        PyDict_SetItemString(res->members, "instance_buffer", (PyObject *)res->instance_buffer);
     }
 
     if (args.index_count) {
@@ -168,6 +172,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
             args.index_count * index_size,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         });
+        PyDict_SetItemString(res->members, "index_buffer", (PyObject *)res->index_buffer);
     }
 
     if (args.indirect_count) {
@@ -177,6 +182,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
             args.indirect_count * indirect_size,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
         });
+        PyDict_SetItemString(res->members, "indirect_buffer", (PyObject *)res->indirect_buffer);
     }
 
     allocate_memory(memory);
@@ -543,7 +549,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     self->instance->vkCreateGraphicsPipelines(self->instance->device, NULL, 1, &graphics_pipeline_create_info, NULL, &res->pipeline);
 
-    res->members = PyDict_New();
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
         if (res->buffer_array[i].name != Py_None) {
             PyDict_SetItem(res->members, res->buffer_array[i].name, (PyObject *)res->buffer_array[i].buffer);

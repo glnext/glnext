@@ -75,6 +75,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     ComputePipeline * res = PyObject_New(ComputePipeline, self->state->ComputePipeline_type);
 
     res->instance = self;
+    res->members = PyDict_New();
     res->compute_count = args.compute_count;
 
     res->buffer_count = (uint32_t)PyList_Size(args.buffers);
@@ -282,7 +283,6 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
 
     self->vkCreateComputePipelines(self->device, NULL, 1, &compute_pipeline_create_info, NULL, &res->pipeline);
 
-    res->members = PyDict_New();
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
         if (res->buffer_array[i].name != Py_None) {
             PyDict_SetItem(res->members, res->buffer_array[i].name, (PyObject *)res->buffer_array[i].buffer);
