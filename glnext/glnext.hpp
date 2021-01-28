@@ -90,6 +90,7 @@ struct ModuleState {
     PyTypeObject * Memory_type;
     PyTypeObject * Buffer_type;
     PyTypeObject * Image_type;
+    PyTypeObject * StagingBuffer_type;
 
     PyObject * empty_str;
     PyObject * empty_list;
@@ -129,6 +130,8 @@ struct Instance {
     PyObject * buffer_list;
     PyObject * image_list;
     PyObject * log_list;
+
+    PyObject * staged_input_image_list;
 
     ModuleState * state;
 
@@ -216,6 +219,7 @@ struct Instance {
 
 struct Image;
 struct Buffer;
+struct StagingBuffer;
 
 struct BufferBinding {
     PyObject * name;
@@ -340,8 +344,8 @@ struct Buffer {
     VkDeviceSize size;
     VkBufferUsageFlags usage;
     VkBuffer buffer;
-    // StagingBuffer * staging_buffer;
-    // VkDeviceSize staging_offset;
+    StagingBuffer * staging_buffer;
+    VkDeviceSize staging_offset;
 };
 
 struct Image {
@@ -358,8 +362,18 @@ struct Image {
     ImageMode mode;
     VkFormat format;
     VkImage image;
-    // StagingBuffer * staging_buffer;
-    // VkDeviceSize staging_offset;
+    StagingBuffer * staging_buffer;
+    VkDeviceSize staging_offset;
+};
+
+struct StagingBuffer {
+    PyObject_HEAD
+    Instance * instance;
+    VkDeviceSize size;
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+    void * ptr;
+    PyObject * mem;
 };
 
 struct BufferCreateInfo {
@@ -392,6 +406,10 @@ PFN_vkGetInstanceProcAddr get_instance_proc_addr(const char * backend);
 void load_library_methods(Instance * instance);
 void load_instance_methods(Instance * instance);
 void load_device_methods(Instance * instance);
+
+void staging_input_buffer(Buffer * self);
+void staging_output_buffer(Buffer * self);
+void staging_input_image(Image * self);
 
 void install_debug_messenger(Instance * instance);
 

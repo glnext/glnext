@@ -9,6 +9,7 @@
 #include "instance.cpp"
 #include "loader.cpp"
 #include "render_pipeline.cpp"
+#include "staging_buffer.cpp"
 #include "surface.cpp"
 #include "tools.cpp"
 #include "utils.cpp"
@@ -26,6 +27,7 @@ PyMethodDef Instance_methods[] = {
     {"framebuffer", (PyCFunction)Instance_meth_framebuffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"compute", (PyCFunction)Instance_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"staging_buffer", (PyCFunction)Instance_meth_staging_buffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
     {"run", (PyCFunction)Instance_meth_run, METH_NOARGS, NULL},
     {},
@@ -46,6 +48,12 @@ PyMethodDef Buffer_methods[] = {
 PyMethodDef Image_methods[] = {
     {"read", (PyCFunction)Image_meth_read, METH_NOARGS, NULL},
     {"write", (PyCFunction)Image_meth_write, METH_O, NULL},
+    {},
+};
+
+PyMethodDef StagingBuffer_methods[] = {
+    {"read", (PyCFunction)StagingBuffer_meth_read, METH_NOARGS, NULL},
+    {"write", (PyCFunction)StagingBuffer_meth_write, METH_O, NULL},
     {},
 };
 
@@ -112,6 +120,12 @@ PyType_Slot Image_slots[] = {
     {},
 };
 
+PyType_Slot StagingBuffer_slots[] = {
+    {Py_tp_methods, StagingBuffer_methods},
+    {Py_tp_dealloc, default_dealloc},
+    {},
+};
+
 PyType_Spec Instance_spec = {"glnext.Instance", sizeof(Instance), 0, Py_TPFLAGS_DEFAULT, Instance_slots};
 PyType_Spec Framebuffer_spec = {"glnext.Framebuffer", sizeof(Framebuffer), 0, Py_TPFLAGS_DEFAULT, Framebuffer_slots};
 PyType_Spec RenderPipeline_spec = {"glnext.RenderPipeline", sizeof(RenderPipeline), 0, Py_TPFLAGS_DEFAULT, RenderPipeline_slots};
@@ -119,6 +133,7 @@ PyType_Spec ComputePipeline_spec = {"glnext.ComputePipeline", sizeof(ComputePipe
 PyType_Spec Memory_spec = {"glnext.Memory", sizeof(Memory), 0, Py_TPFLAGS_DEFAULT, Memory_slots};
 PyType_Spec Buffer_spec = {"glnext.Buffer", sizeof(Buffer), 0, Py_TPFLAGS_DEFAULT, Buffer_slots};
 PyType_Spec Image_spec = {"glnext.Image", sizeof(Image), 0, Py_TPFLAGS_DEFAULT, Image_slots};
+PyType_Spec StagingBuffer_spec = {"glnext.StagingBuffer", sizeof(StagingBuffer), 0, Py_TPFLAGS_DEFAULT, StagingBuffer_slots};
 
 int module_exec(PyObject * self) {
     ModuleState * state = (ModuleState *)PyModule_GetState(self);
@@ -128,6 +143,7 @@ int module_exec(PyObject * self) {
     state->RenderPipeline_type = (PyTypeObject *)PyType_FromSpec(&RenderPipeline_spec);
     state->ComputePipeline_type = (PyTypeObject *)PyType_FromSpec(&ComputePipeline_spec);
     state->Memory_type = (PyTypeObject *)PyType_FromSpec(&Memory_spec);
+    state->StagingBuffer_type = (PyTypeObject *)PyType_FromSpec(&StagingBuffer_spec);
     state->Buffer_type = (PyTypeObject *)PyType_FromSpec(&Buffer_spec);
     state->Image_type = (PyTypeObject *)PyType_FromSpec(&Image_spec);
 
