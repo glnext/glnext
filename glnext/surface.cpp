@@ -30,43 +30,6 @@ CompatibleFormat * get_compatible_format(VkFormat src, uint32_t surface_format_c
     return NULL;
 }
 
-bool copy_compatible(VkFormat src, VkFormat dst) {
-    if (src == VK_FORMAT_R8G8B8A8_UNORM && dst == VK_FORMAT_B8G8R8A8_UNORM) {
-        return true;
-    }
-    if (src == VK_FORMAT_R8G8B8A8_UINT && dst == VK_FORMAT_B8G8R8A8_UNORM) {
-        return true;
-    }
-    if (src == VK_FORMAT_R8G8B8A8_SRGB && dst == VK_FORMAT_B8G8R8A8_SRGB) {
-        return true;
-    }
-    if (src == VK_FORMAT_R32_UINT && dst == VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
-        return true;
-    }
-    return false;
-}
-
-bool convert_compatible(VkFormat src, VkFormat dst) {
-    if (src == VK_FORMAT_R16G16B16A16_SFLOAT && dst == VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
-        return true;
-    }
-    if (src == VK_FORMAT_R32G32B32A32_SFLOAT && dst == VK_FORMAT_A2B10G10R10_UNORM_PACK32) {
-        return true;
-    }
-    return false;
-}
-
-
-bool fallback_convert_compatible(VkFormat src, VkFormat dst) {
-    if (src == VK_FORMAT_R16G16B16A16_SFLOAT && dst == VK_FORMAT_B8G8R8A8_UNORM) {
-        return true;
-    }
-    if (src == VK_FORMAT_R32G32B32A32_SFLOAT && dst == VK_FORMAT_B8G8R8A8_UNORM) {
-        return true;
-    }
-    return false;
-}
-
 PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "window",
