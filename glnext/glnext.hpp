@@ -402,6 +402,8 @@ T * allocate(uint32_t count) {
     return (T *)PyMem_Malloc(sizeof(T) * count);
 }
 
+PyObject * Buffer_meth_write(Buffer * self, PyObject * arg);
+
 PFN_vkGetInstanceProcAddr get_instance_proc_addr(const char * backend);
 void load_library_methods(Instance * instance);
 void load_instance_methods(Instance * instance);

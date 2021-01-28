@@ -10,6 +10,10 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         "instance_count",
         "index_count",
         "indirect_count",
+        "vertex_buffer",
+        "instance_buffer",
+        "index_buffer",
+        "indirect_buffer",
         "topology",
         "buffers",
         "images",
@@ -26,6 +30,10 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         uint32_t instance_count = 1;
         uint32_t index_count = 0;
         uint32_t indirect_count = 0;
+        PyObject * vertex_buffer = Py_None;
+        PyObject * instance_buffer = Py_None;
+        PyObject * index_buffer = Py_None;
+        PyObject * indirect_buffer = Py_None;
         PyObject * topology;
         PyObject * buffers;
         PyObject * images;
@@ -41,7 +49,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$O!O!OOIIIIOOOO",
+        "|$O!O!OOIIIIOOOOOOOO",
         keywords,
         &PyBytes_Type,
         &args.vertex_shader,
@@ -53,6 +61,10 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         &args.instance_count,
         &args.index_count,
         &args.indirect_count,
+        &args.vertex_buffer,
+        &args.instance_buffer,
+        &args.index_buffer,
+        &args.indirect_buffer,
         &args.topology,
         &args.buffers,
         &args.images,
@@ -69,11 +81,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     res->instance = self->instance;
     res->members = PyDict_New();
-
-    res->vertex_count = args.vertex_count;
-    res->instance_count = args.instance_count;
-    res->index_count = args.index_count;
-    res->indirect_count = args.indirect_count;
 
     PyObject * vertex_format = PyUnicode_Split(args.vertex_format, NULL, -1);
     PyObject * instance_format = PyUnicode_Split(args.instance_format, NULL, -1);
@@ -112,6 +119,15 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     for (uint32_t i = vertex_attribute_count; i < attribute_count; ++i) {
         binding_array[i] = {i, istride, VK_VERTEX_INPUT_RATE_INSTANCE};
     }
+
+    if (!args.vertex_count && vstride && args.vertex_buffer != Py_None) {
+        args.vertex_count = (uint32_t)PyBytes_Size(args.vertex_buffer) / vstride;
+    }
+
+    res->vertex_count = args.vertex_count;
+    res->instance_count = args.instance_count;
+    res->index_count = args.index_count;
+    res->indirect_count = args.indirect_count;
 
     VkBool32 short_index = false;
     uint32_t index_size = short_index ? 2 : 4;
@@ -209,6 +225,10 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     if (res->indirect_buffer) {
         bind_buffer(res->indirect_buffer);
+    }
+
+    if (args.vertex_buffer != Py_None) {
+        Buffer_meth_write(res->vertex_buffer, args.vertex_buffer);
     }
 
     for (uint32_t i = 0; i < res->image_count; ++i) {
