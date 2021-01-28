@@ -23,10 +23,10 @@ PyObject * Buffer_meth_read(Buffer * self) {
 }
 
 PyObject * Buffer_meth_write(Buffer * self, PyObject * arg) {
-    // if (self->staging_buffer) {
-    //     PyErr_Format(PyExc_ValueError, "staged");
-    //     return NULL;
-    // }
+    if (self->staging_buffer) {
+        PyErr_Format(PyExc_ValueError, "staged");
+        return NULL;
+    }
 
     Py_buffer view = {};
     if (PyObject_GetBuffer(arg, &view, PyBUF_STRIDED_RO)) {
