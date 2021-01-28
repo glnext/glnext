@@ -398,62 +398,66 @@ ImageBinding parse_image_binding(PyObject * obj) {
 
     Py_INCREF(res.name);
 
-    res.sampled = false;
-    res.image_count = 1;
-    res.image_array = new Image * [1];
-    res.sampler_array = new VkSampler[1];
-    res.image_view_array = new VkImageView[1];
-    res.sampler_create_info_array = new VkSamplerCreateInfo[1];
-    res.descriptor_image_info_array = new VkDescriptorImageInfo[1];
-    res.image_view_create_info_array = new VkImageViewCreateInfo[1];
-
-    Image * image = (Image *)PyDict_GetItemString(obj, "image");
-
     if (!PyUnicode_CompareWithASCIIString(type, "storage_image")) {
         res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         res.layout = VK_IMAGE_LAYOUT_GENERAL;
+        res.sampled = false;
     }
 
     if (!PyUnicode_CompareWithASCIIString(type, "sampled_image")) {
         res.descriptor_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         res.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        res.sampled = true;
     }
 
-    res.image_view_array[0] = NULL;
-    res.sampler_array[0] = NULL;
-    res.image_array[0] = image;
+    PyObject * images = PyDict_GetItemString(obj, "images");
+    res.image_count = (uint32_t)PyList_Size(images);
 
-    res.sampler_create_info_array[0] = {
-        VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        NULL,
-        0,
-        VK_FILTER_NEAREST,
-        VK_FILTER_NEAREST,
-        VK_SAMPLER_MIPMAP_MODE_NEAREST,
-        VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        0.0f,
-        false,
-        0.0f,
-        false,
-        VK_COMPARE_OP_NEVER,
-        0.0f,
-        1000.0f,
-        VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
-        false,
-    };
+    res.image_array = allocate<Image *>(res.image_count);
+    res.sampler_array = allocate<VkSampler>(res.image_count);
+    res.image_view_array = allocate<VkImageView>(res.image_count);
+    res.sampler_create_info_array = allocate<VkSamplerCreateInfo>(res.image_count);
+    res.descriptor_image_info_array = allocate<VkDescriptorImageInfo>(res.image_count);
+    res.image_view_create_info_array = allocate<VkImageViewCreateInfo>(res.image_count);
 
-    res.image_view_create_info_array[0] = {
-        VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        NULL,
-        0,
-        res.image_array[0]->image,
-        VK_IMAGE_VIEW_TYPE_2D,
-        res.image_array[0]->format,
-        {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, res.image_array[0]->layers},
-    };
+    for (uint32_t i = 0; i < res.image_count; ++i) {
+        Image * image = (Image *)PyList_GetItem(images, i);
+        res.image_view_array[i] = NULL;
+        res.sampler_array[i] = NULL;
+        res.image_array[i] = image;
+
+        res.sampler_create_info_array[i] = {
+            VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            NULL,
+            0,
+            VK_FILTER_NEAREST,
+            VK_FILTER_NEAREST,
+            VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            0.0f,
+            false,
+            0.0f,
+            false,
+            VK_COMPARE_OP_NEVER,
+            0.0f,
+            1000.0f,
+            VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
+            false,
+        };
+
+        res.image_view_create_info_array[i] = {
+            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            NULL,
+            0,
+            res.image_array[i]->image,
+            VK_IMAGE_VIEW_TYPE_2D,
+            res.image_array[i]->format,
+            {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, res.image_array[i]->layers},
+        };
+    }
 
     return res;
 }
