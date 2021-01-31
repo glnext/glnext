@@ -539,7 +539,7 @@ uint16_t half_float(double value) {
         uint32_t x;
     };
     f = (float)value;
-    return (x >> 16 & 0x8000) | (((x >> 23 & 0xff) - 127 + 15) << 10 & 0x1f) | (x >> 12 & 0x3ff);
+    return (x >> 16 & 0xc000) | (x >> 13 & 0x3cf0) | (x >> 13 & 0x03ff);
 }
 
 void pack_float_1(char * ptr, PyObject ** obj) {
