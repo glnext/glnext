@@ -29,6 +29,7 @@ glnext = Extension(
     name='glnext',
     sources=['glnext/glnext.cpp'],
     depends=[
+        'glnext/binding.cpp',
         'glnext/buffer.cpp',
         'glnext/compute_pipeline.cpp',
         'glnext/debug.cpp',

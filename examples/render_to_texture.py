@@ -44,8 +44,6 @@ triangle_pipeline = triangle_framebuffer.render(
     vertex_count=3,
 )
 
-sampler = instance.sampler(triangle_framebuffer.output[0])
-
 framebuffer = instance.framebuffer((512, 512))
 
 pipeline = framebuffer.render(
@@ -67,7 +65,7 @@ pipeline = framebuffer.render(
         #version 450
         #pragma shader_stage(fragment)
 
-        layout (binding = 1) uniform sampler2D Texture[];
+        layout (binding = 0) uniform sampler2D Texture[];
 
         layout (location = 0) in vec2 in_text;
         layout (location = 0) out vec4 out_color;
@@ -78,7 +76,21 @@ pipeline = framebuffer.render(
     '''),
     vertex_format='2f 2f',
     vertex_count=3,
-    samplers=[sampler],
+    images=[
+        {
+            'binding': 0,
+            'type': 'sampled_image',
+            'images': [
+                {
+                    'image': triangle_framebuffer.output[0],
+                    'sampler': {
+                        'min_filter': 'linear',
+                        'mag_filter': 'linear',
+                    },
+                }
+            ],
+        },
+    ],
 )
 
 pipeline.update(

@@ -1,5 +1,6 @@
 #include "glnext.hpp"
 
+#include "binding.cpp"
 #include "buffer.cpp"
 #include "compute_pipeline.cpp"
 #include "debug.cpp"

@@ -47,6 +47,10 @@ pipeline = framebuffer.render(
             'images': [
                 {
                     'image': image,
+                    'sampler': {
+                        'min_filter': 'linear',
+                        'mag_filter': 'linear',
+                    },
                 }
             ],
         },
