@@ -48,13 +48,15 @@ pipeline = framebuffer.render(
     instance_count=5,
 )
 
-pipeline['instance_buffer'].write(glnext.pack([
-    -0.5, -0.5,
-    0.5, -0.5,
-    -0.5, 0.5,
-    0.5, 0.5,
-    0.0, 0.0,
-]))
+pipeline.update(
+    instance_buffer=glnext.pack([
+        -0.5, -0.5,
+        0.5, -0.5,
+        -0.5, 0.5,
+        0.5, 0.5,
+        0.0, 0.0,
+    ]),
+)
 
 instance.run()
 data = framebuffer.output[0].read()

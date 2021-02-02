@@ -25,7 +25,7 @@ pipeline = framebuffer.render(
             gl_Position = mvp * vec4(in_vert, 1.0);
             out_norm = in_norm;
         }
-'''),
+    '''),
     fragment_shader=glsl('''
         #version 450
         #pragma shader_stage(fragment)
@@ -57,8 +57,10 @@ pipeline = framebuffer.render(
     ],
 )
 
-pipeline['uniform_buffer'].write(glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0)))
-pipeline['vertex_buffer'].write(Obj.open('examples/cube.obj').pack('vx vy vz nx ny nz'))
+pipeline.update(
+    uniform_buffer=glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0)),
+    vertex_buffer=Obj.open('examples/cube.obj').pack('vx vy vz nx ny nz'),
+)
 
 instance.run()
 data = framebuffer.output[0].read()

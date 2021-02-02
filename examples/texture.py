@@ -8,8 +8,6 @@ texture = Image.open('examples/rock.jpg').convert('RGBA')
 image = instance.image(texture.size, '4b')
 image.write(texture.tobytes())
 
-sampler = instance.sampler(image)
-
 framebuffer = instance.framebuffer((512, 512))
 
 pipeline = framebuffer.render(
@@ -42,7 +40,13 @@ pipeline = framebuffer.render(
     '''),
     vertex_format='2f 2f',
     vertex_count=3,
-    samplers=[sampler],
+    images=[
+        {
+            'binding': 0,
+            'type': 'sampled_image',
+            'images': [image],
+        },
+    ],
 )
 
 pipeline.update(

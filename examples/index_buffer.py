@@ -37,17 +37,18 @@ pipeline = framebuffer.render(
     index_count=6,
 )
 
-pipeline['vertex_buffer'].write(glnext.pack([
-    -0.5, -0.5, 1.0, 0.0, 0.0, 1.0,
-    0.5, -0.5, 0.0, 1.0, 0.0, 1.0,
-    -0.5, 0.5, 0.0, 0.0, 1.0, 1.0,
-    0.5, 0.5, 1.0, 1.0, 1.0, 1.0,
-]))
-
-pipeline['index_buffer'].write(glnext.pack([
-    0, 1, 2,
-    2, 1, 3,
-]))
+pipeline.update(
+    vertex_buffer=glnext.pack([
+        -0.5, -0.5, 1.0, 0.0, 0.0, 1.0,
+        0.5, -0.5, 0.0, 1.0, 0.0, 1.0,
+        -0.5, 0.5, 0.0, 0.0, 1.0, 1.0,
+        0.5, 0.5, 1.0, 1.0, 1.0, 1.0,
+    ]),
+    index_buffer=glnext.pack([
+        0, 1, 2,
+        2, 1, 3,
+    ]),
+)
 
 instance.run()
 data = framebuffer.output[0].read()
