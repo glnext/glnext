@@ -5,7 +5,7 @@ from PIL import Image
 instance = glnext.instance()
 
 texture = Image.open('examples/rock.jpg').convert('RGBA')
-image = instance.image(texture.size, '4b')
+image = instance.image(texture.size)
 image.write(texture.tobytes())
 
 framebuffer = instance.framebuffer((512, 512))
@@ -29,7 +29,7 @@ pipeline = framebuffer.render(
         #version 450
         #pragma shader_stage(fragment)
 
-        layout (binding = 1) uniform sampler2D Texture[];
+        layout (binding = 0) uniform sampler2D Texture[];
 
         layout (location = 0) in vec2 in_text;
         layout (location = 0) out vec4 out_color;
@@ -44,7 +44,11 @@ pipeline = framebuffer.render(
         {
             'binding': 0,
             'type': 'sampled_image',
-            'images': [image],
+            'images': [
+                {
+                    'image': image,
+                }
+            ],
         },
     ],
 )
