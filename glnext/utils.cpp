@@ -1,14 +1,5 @@
 #include "glnext.hpp"
 
-uint32_t take_uint(PyObject * dict, const char * key) {
-    PyObject * value = PyDict_GetItemString(dict, key);
-    if (!value) {
-        PyErr_Format(PyExc_KeyError, key);
-        return 0;
-    }
-    return PyLong_AsUnsignedLong(value);
-}
-
 VkCommandBuffer begin_commands(Instance * self) {
     VkCommandBufferBeginInfo command_buffer_begin_info = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
