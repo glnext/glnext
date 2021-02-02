@@ -72,6 +72,11 @@ PyMemberDef RenderPipeline_members[] = {
     {},
 };
 
+PyMemberDef StagingBuffer_members[] = {
+    {"mem", T_OBJECT_EX, offsetof(StagingBuffer, mem), READONLY, NULL},
+    {},
+};
+
 void default_dealloc(PyObject * self) {
     Py_TYPE(self)->tp_free(self);
 }
@@ -122,6 +127,7 @@ PyType_Slot Image_slots[] = {
 
 PyType_Slot StagingBuffer_slots[] = {
     {Py_tp_methods, StagingBuffer_methods},
+    {Py_tp_members, StagingBuffer_members},
     {Py_tp_dealloc, default_dealloc},
     {},
 };

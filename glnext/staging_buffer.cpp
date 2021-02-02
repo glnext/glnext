@@ -26,14 +26,24 @@ StagingBuffer * Instance_meth_staging_buffer(Instance * self, PyObject * vargs, 
             PyObject * obj = PyList_GetItem(lst, i);
 
             if (Py_TYPE(obj) == self->state->Image_type) {
-                PyList_Append(self->staged_input_image_list, obj);
                 Image * image = (Image *)obj;
+                if (image->user_created) {
+                    PyList_Append(self->staged_inputs, obj);
+                } else {
+                    PyList_Append(self->staged_outputs, obj);
+                }
                 image->staging_buffer = res;
                 image->staging_offset = size;
                 size += image->size;
             }
             if (Py_TYPE(obj) == self->state->Buffer_type) {
                 Buffer * buffer = (Buffer *)obj;
+                if (buffer->usage & VK_BUFFER_USAGE_TRANSFER_DST_BIT) {
+                    PyList_Append(self->staged_inputs, obj);
+                }
+                if (buffer->usage & VK_BUFFER_USAGE_TRANSFER_SRC_BIT) {
+                    PyList_Append(self->staged_outputs, obj);
+                }
                 buffer->staging_buffer = res;
                 buffer->staging_offset = size;
                 size += buffer->size;
@@ -218,5 +228,27 @@ void staging_input_image(Image * self) {
             //     &image,
             // });
         }
+    }
+}
+
+void staging_output_image(Image * self) {
+    if (self && self->staging_buffer) {
+        VkBufferImageCopy copy = {
+            self->staging_offset,
+            self->extent.width,
+            self->extent.height,
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, self->layers},
+            {0, 0, 0},
+            self->extent,
+        };
+
+        self->instance->vkCmdCopyImageToBuffer(
+            self->instance->command_buffer,
+            self->image,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            self->staging_buffer->buffer,
+            1,
+            &copy
+        );
     }
 }

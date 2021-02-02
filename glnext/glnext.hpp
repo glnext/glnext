@@ -131,7 +131,8 @@ struct Instance {
     PyObject * image_list;
     PyObject * log_list;
 
-    PyObject * staged_input_image_list;
+    PyObject * staged_inputs;
+    PyObject * staged_outputs;
 
     ModuleState * state;
 
@@ -364,6 +365,7 @@ struct Image {
     VkImage image;
     StagingBuffer * staging_buffer;
     VkDeviceSize staging_offset;
+    VkBool32 user_created;
 };
 
 struct StagingBuffer {
@@ -395,6 +397,7 @@ struct ImageCreateInfo {
     uint32_t layers;
     ImageMode mode;
     VkFormat format;
+    VkBool32 user_created;
 };
 
 template <typename T>
@@ -412,6 +415,7 @@ void load_device_methods(Instance * instance);
 void staging_input_buffer(Buffer * self);
 void staging_output_buffer(Buffer * self);
 void staging_input_image(Image * self);
+void staging_output_image(Image * self);
 
 void install_debug_messenger(Instance * instance);
 

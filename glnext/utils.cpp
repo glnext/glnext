@@ -255,6 +255,7 @@ Image * new_image(ImageCreateInfo info) {
     res->image = NULL;
     res->staging_buffer = NULL;
     res->staging_offset = 0;
+    res->user_created = info.user_created;
 
     VkImageCreateFlags flags = 0;
     if (info.mode == IMG_STORAGE) {

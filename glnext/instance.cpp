@@ -78,7 +78,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->image_list = PyList_New(0);
     res->log_list = PyList_New(0);
 
-    res->staged_input_image_list = PyList_New(0);
+    res->staged_inputs = PyList_New(0);
+    res->staged_outputs = PyList_New(0);
 
     VkApplicationInfo application_info = {
         VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -264,20 +265,33 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 PyObject * Instance_meth_run(Instance * self) {
     begin_commands(self);
 
-    for (uint32_t i = 0; i < PyList_Size(self->staged_input_image_list); ++i) {
-        Image * image = (Image *)PyList_GetItem(self->staged_input_image_list, i);
-        staging_input_image(image);
+    for (uint32_t i = 0; i < PyList_Size(self->staged_inputs); ++i) {
+        PyObject * item = PyList_GetItem(self->staged_inputs, i);
+        if (Py_TYPE(item) == self->state->Buffer_type) {
+            staging_input_buffer((Buffer *)item);
+        }
+        if (Py_TYPE(item) == self->state->Image_type) {
+            staging_input_image((Image *)item);
+        }
     }
 
     for (uint32_t i = 0; i < PyList_Size(self->task_list); ++i) {
         PyObject * task = PyList_GetItem(self->task_list, i);
         if (Py_TYPE(task) == self->state->Framebuffer_type) {
-            Framebuffer * framebuffer = (Framebuffer *)PyList_GetItem(self->task_list, i);
-            execute_framebuffer(framebuffer);
+            execute_framebuffer((Framebuffer *)task);
         }
         if (Py_TYPE(task) == self->state->ComputePipeline_type) {
-            ComputePipeline * pipeline = (ComputePipeline *)PyList_GetItem(self->task_list, i);
-            execute_compute_pipeline(pipeline);
+            execute_compute_pipeline((ComputePipeline *)task);
+        }
+    }
+
+    for (uint32_t i = 0; i < PyList_Size(self->staged_outputs); ++i) {
+        PyObject * item = PyList_GetItem(self->staged_outputs, i);
+        if (Py_TYPE(item) == self->state->Buffer_type) {
+            staging_output_buffer((Buffer *)item);
+        }
+        if (Py_TYPE(item) == self->state->Image_type) {
+            staging_output_image((Image *)item);
         }
     }
 
