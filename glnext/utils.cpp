@@ -1,5 +1,14 @@
 #include "glnext.hpp"
 
+uint32_t take_uint(PyObject * dict, const char * key) {
+    PyObject * value = PyDict_GetItemString(dict, key);
+    if (!value) {
+        PyErr_Format(PyExc_KeyError, key);
+        return 0;
+    }
+    return PyLong_AsUnsignedLong(value);
+}
+
 VkCommandBuffer begin_commands(Instance * self) {
     VkCommandBufferBeginInfo command_buffer_begin_info = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -331,14 +340,10 @@ void bind_buffer(Buffer * self) {
     self->instance->vkBindBufferMemory(self->instance->device, self->buffer, self->memory->memory, self->offset);
 }
 
-BufferBinding parse_buffer_binding(PyObject * obj) {
+BufferBinding parse_buffer_binding(Instance * instance, PyObject * obj) {
     BufferBinding res = {};
 
-    PyObject * type = PyDict_GetItemString(obj, "type");
-    PyObject * buffer = PyDict_GetItemString(obj, "buffer");
-
     res.name = PyDict_GetItemString(obj, "name");
-    res.binding = PyLong_AsUnsignedLong(PyDict_GetItemString(obj, "binding"));
 
     if (!res.name) {
         res.name = Py_None;
@@ -346,10 +351,17 @@ BufferBinding parse_buffer_binding(PyObject * obj) {
 
     Py_INCREF(res.name);
 
-    if (buffer && buffer != Py_None) {
-        res.buffer = (Buffer *)buffer;
-    } else {
-        res.size = PyLong_AsUnsignedLongLong(PyDict_GetItemString(obj, "size"));
+    res.binding = take_uint(obj, "binding");
+
+    if (PyErr_Occurred()) {
+        return res;
+    }
+
+    PyObject * type = PyDict_GetItemString(obj, "type");
+
+    if (!type) {
+        PyErr_Format(PyExc_KeyError, "type");
+        return res;
     }
 
     if (!PyUnicode_CompareWithASCIIString(type, "uniform_buffer")) {
@@ -376,6 +388,37 @@ BufferBinding parse_buffer_binding(PyObject * obj) {
         res.mode = BUF_OUTPUT;
     }
 
+    if (!res.usage) {
+        PyErr_Format(PyExc_TypeError, "invalid type");
+        return res;
+    }
+
+    PyObject * buffer = PyDict_GetItemString(obj, "buffer");
+
+    if (buffer && Py_TYPE(buffer) != instance->state->Buffer_type) {
+        PyErr_Format(PyExc_TypeError, "invalid buffer");
+        return res;
+    }
+
+    if (buffer && buffer != Py_None) {
+        res.buffer = (Buffer *)buffer;
+    }
+
+    if (!res.buffer) {
+        PyObject * size = PyDict_GetItemString(obj, "size");
+
+        if (!size) {
+            PyErr_Format(PyExc_KeyError, "type");
+            return res;
+        }
+
+        res.size = PyLong_AsUnsignedLongLong(size);
+
+        if (PyErr_Occurred()) {
+            return res;
+        }
+    }
+
     res.descriptor_buffer_info = {
         NULL,
         0,
@@ -385,19 +428,29 @@ BufferBinding parse_buffer_binding(PyObject * obj) {
     return res;
 }
 
-ImageBinding parse_image_binding(PyObject * obj) {
+ImageBinding parse_image_binding(Instance * instance, PyObject * obj) {
     ImageBinding res = {};
 
-    PyObject * type = PyDict_GetItemString(obj, "type");
-
     res.name = PyDict_GetItemString(obj, "name");
-    res.binding = PyLong_AsUnsignedLong(PyDict_GetItemString(obj, "binding"));
 
     if (!res.name) {
         res.name = Py_None;
     }
 
     Py_INCREF(res.name);
+
+    res.binding = take_uint(obj, "binding");
+
+    if (PyErr_Occurred()) {
+        return res;
+    }
+
+    PyObject * type = PyDict_GetItemString(obj, "type");
+
+    if (!type) {
+        PyErr_Format(PyExc_KeyError, "type");
+        return res;
+    }
 
     if (!PyUnicode_CompareWithASCIIString(type, "storage_image")) {
         res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -411,7 +464,23 @@ ImageBinding parse_image_binding(PyObject * obj) {
         res.sampled = true;
     }
 
+    if (res.layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+        PyErr_Format(PyExc_TypeError, "invalid type");
+        return res;
+    }
+
     PyObject * images = PyDict_GetItemString(obj, "images");
+
+    if (!images) {
+        PyErr_Format(PyExc_KeyError, "images");
+        return res;
+    }
+
+    if (!PyList_CheckExact(images)) {
+        PyErr_Format(PyExc_ValueError, "images");
+        return res;
+    }
+
     res.image_count = (uint32_t)PyList_Size(images);
 
     res.image_array = allocate<Image *>(res.image_count);
@@ -422,7 +491,24 @@ ImageBinding parse_image_binding(PyObject * obj) {
     res.image_view_create_info_array = allocate<VkImageViewCreateInfo>(res.image_count);
 
     for (uint32_t i = 0; i < res.image_count; ++i) {
-        Image * image = (Image *)PyList_GetItem(images, i);
+        PyObject * item = PyList_GetItem(images, i);
+
+        if (!PyDict_CheckExact(item)) {
+            PyErr_Format(PyExc_ValueError, "images");
+            return res;
+        }
+        Image * image = (Image *)PyDict_GetItemString(item, "image");
+
+        if (!image) {
+            PyErr_Format(PyExc_KeyError, "image");
+            return res;
+        }
+
+        if (Py_TYPE(image) != instance->state->Image_type) {
+            PyErr_Format(PyExc_ValueError, "invalid image");
+            return res;
+        }
+
         res.image_view_array[i] = NULL;
         res.sampler_array[i] = NULL;
         res.image_array[i] = image;

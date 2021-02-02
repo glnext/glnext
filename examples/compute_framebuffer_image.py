@@ -24,7 +24,11 @@ compute = framebuffer.compute(
         {
             'binding': 0,
             'type': 'storage_image',
-            'images': [framebuffer.output[0]],
+            'images': [
+                {
+                    'image': framebuffer.output[0],
+                }
+            ],
         },
     ],
 )

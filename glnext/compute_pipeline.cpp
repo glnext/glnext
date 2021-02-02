@@ -85,7 +85,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     res->image_array = (ImageBinding *)PyMem_Malloc(sizeof(ImageBinding) * PyList_Size(args.images));
 
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        BufferBinding buffer_binding = parse_buffer_binding(PyList_GetItem(args.buffers, i));
+        BufferBinding buffer_binding = parse_buffer_binding(self, PyList_GetItem(args.buffers, i));
         if (!buffer_binding.buffer) {
             buffer_binding.buffer = new_buffer({
                 self,
@@ -94,11 +94,17 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
                 buffer_binding.usage,
             });
         }
+        if (PyErr_Occurred()) {
+            return NULL;
+        }
         res->buffer_array[i] = buffer_binding;
     }
 
     for (uint32_t i = 0; i < res->image_count; ++i) {
-        res->image_array[i] = parse_image_binding(PyList_GetItem(args.images, i));
+        res->image_array[i] = parse_image_binding(self, PyList_GetItem(args.images, i));
+        if (PyErr_Occurred()) {
+            return NULL;
+        }
     }
 
     allocate_memory(memory);
