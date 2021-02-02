@@ -340,180 +340,182 @@ void bind_buffer(Buffer * self) {
     self->instance->vkBindBufferMemory(self->instance->device, self->buffer, self->memory->memory, self->offset);
 }
 
-BufferBinding parse_buffer_binding(Instance * instance, PyObject * obj) {
-    BufferBinding res = {};
+int parse_buffer_binding(Instance * instance, BufferBinding * binding, PyObject * obj) {
+    memset(binding, 0, sizeof(BufferBinding));
 
-    res.name = PyDict_GetItemString(obj, "name");
+    binding->name = PyDict_GetItemString(obj, "name");
+    Py_XINCREF(binding->name);
 
-    if (!res.name) {
-        res.name = Py_None;
+    if (binding->name && !PyUnicode_CheckExact(binding->name)) {
+        return -1;
     }
 
-    Py_INCREF(res.name);
+    PyObject * binding_int = PyDict_GetItemString(obj, "binding");
 
-    res.binding = take_uint(obj, "binding");
+    if (!binding_int) {
+        return -1;
+    }
+
+    binding->binding = PyLong_AsUnsignedLong(binding_int);
 
     if (PyErr_Occurred()) {
-        return res;
+        return -1;
     }
 
     PyObject * type = PyDict_GetItemString(obj, "type");
 
-    if (!type) {
-        PyErr_Format(PyExc_KeyError, "type");
-        return res;
+    if (!type || !PyUnicode_CheckExact(type)) {
+        return -1;
     }
 
+    bool valid_type = false;
+
     if (!PyUnicode_CompareWithASCIIString(type, "uniform_buffer")) {
-        res.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        res.descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        res.mode = BUF_UNIFORM;
+        binding->usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        binding->descriptor_type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        binding->mode = BUF_UNIFORM;
+        valid_type = true;
     }
 
     if (!PyUnicode_CompareWithASCIIString(type, "storage_buffer")) {
-        res.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        res.mode = BUF_STORAGE;
+        binding->usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        binding->descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binding->mode = BUF_STORAGE;
+        valid_type = true;
     }
 
     if (!PyUnicode_CompareWithASCIIString(type, "input_buffer")) {
-        res.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        res.mode = BUF_INPUT;
+        binding->usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        binding->descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binding->mode = BUF_INPUT;
+        valid_type = true;
     }
 
     if (!PyUnicode_CompareWithASCIIString(type, "output_buffer")) {
-        res.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        res.mode = BUF_OUTPUT;
+        binding->usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        binding->descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binding->mode = BUF_OUTPUT;
+        valid_type = true;
     }
 
-    if (!res.usage) {
-        PyErr_Format(PyExc_TypeError, "invalid type");
-        return res;
+    if (!valid_type) {
+        return -1;
     }
 
-    PyObject * buffer = PyDict_GetItemString(obj, "buffer");
-
-    if (buffer && Py_TYPE(buffer) != instance->state->Buffer_type) {
-        PyErr_Format(PyExc_TypeError, "invalid buffer");
-        return res;
-    }
-
-    if (buffer && buffer != Py_None) {
-        res.buffer = (Buffer *)buffer;
-    }
-
-    if (!res.buffer) {
-        PyObject * size = PyDict_GetItemString(obj, "size");
-
-        if (!size) {
-            PyErr_Format(PyExc_KeyError, "type");
-            return res;
+    if (Buffer * buffer = (Buffer *)PyDict_GetItemString(obj, "buffer")) {
+        if (Py_TYPE(buffer) != instance->state->Buffer_type) {
+            return -1;
         }
 
-        res.size = PyLong_AsUnsignedLongLong(size);
+        binding->buffer = buffer;
+        binding->size = buffer->size;
+    }
+
+    if (PyObject * size = PyDict_GetItemString(obj, "size")) {
+        if (!PyLong_CheckExact(size)) {
+            return -1;
+        }
+
+        binding->size = PyLong_AsUnsignedLongLong(size);
 
         if (PyErr_Occurred()) {
-            return res;
+            return -1;
         }
     }
 
-    res.descriptor_buffer_info = {
+    if (!binding->size) {
+        return -1;
+    }
+
+    binding->descriptor_buffer_info = {
         NULL,
         0,
         VK_WHOLE_SIZE,
     };
 
-    return res;
+    return 0;
 }
 
-ImageBinding parse_image_binding(Instance * instance, PyObject * obj) {
-    ImageBinding res = {};
+int parse_image_binding(Instance * instance, ImageBinding * binding, PyObject * obj) {
+    memset(binding, 0, sizeof(ImageBinding));
 
-    res.name = PyDict_GetItemString(obj, "name");
+    binding->name = PyDict_GetItemString(obj, "name");
+    Py_XINCREF(binding->name);
 
-    if (!res.name) {
-        res.name = Py_None;
+    if (binding->name && !PyUnicode_CheckExact(binding->name)) {
+        return -1;
     }
 
-    Py_INCREF(res.name);
+    PyObject * binding_int = PyDict_GetItemString(obj, "binding");
 
-    res.binding = take_uint(obj, "binding");
+    if (!binding_int) {
+        return -1;
+    }
+
+    binding->binding = PyLong_AsUnsignedLong(binding_int);
 
     if (PyErr_Occurred()) {
-        return res;
+        return -1;
     }
 
     PyObject * type = PyDict_GetItemString(obj, "type");
 
-    if (!type) {
-        PyErr_Format(PyExc_KeyError, "type");
-        return res;
+    if (!type || !PyUnicode_CheckExact(type)) {
+        return -1;
     }
 
+    bool valid_type = false;
+
     if (!PyUnicode_CompareWithASCIIString(type, "storage_image")) {
-        res.descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        res.layout = VK_IMAGE_LAYOUT_GENERAL;
-        res.sampled = false;
+        binding->descriptor_type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        binding->layout = VK_IMAGE_LAYOUT_GENERAL;
+        binding->sampled = false;
+        valid_type = true;
     }
 
     if (!PyUnicode_CompareWithASCIIString(type, "sampled_image")) {
-        res.descriptor_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        res.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        res.sampled = true;
+        binding->descriptor_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        binding->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        binding->sampled = true;
+        valid_type = true;
     }
 
-    if (res.layout == VK_IMAGE_LAYOUT_UNDEFINED) {
-        PyErr_Format(PyExc_TypeError, "invalid type");
-        return res;
+    if (!valid_type) {
+        return -1;
     }
 
     PyObject * images = PyDict_GetItemString(obj, "images");
 
-    if (!images) {
-        PyErr_Format(PyExc_KeyError, "images");
-        return res;
+    if (!images || !PyList_CheckExact(images)) {
+        return -1;
     }
 
-    if (!PyList_CheckExact(images)) {
-        PyErr_Format(PyExc_ValueError, "images");
-        return res;
-    }
+    binding->image_count = (uint32_t)PyList_Size(images);
+    binding->image_array = allocate<Image *>(binding->image_count);
+    binding->sampler_array = allocate<VkSampler>(binding->image_count);
+    binding->image_view_array = allocate<VkImageView>(binding->image_count);
+    binding->sampler_create_info_array = allocate<VkSamplerCreateInfo>(binding->image_count);
+    binding->descriptor_image_info_array = allocate<VkDescriptorImageInfo>(binding->image_count);
+    binding->image_view_create_info_array = allocate<VkImageViewCreateInfo>(binding->image_count);
 
-    res.image_count = (uint32_t)PyList_Size(images);
-
-    res.image_array = allocate<Image *>(res.image_count);
-    res.sampler_array = allocate<VkSampler>(res.image_count);
-    res.image_view_array = allocate<VkImageView>(res.image_count);
-    res.sampler_create_info_array = allocate<VkSamplerCreateInfo>(res.image_count);
-    res.descriptor_image_info_array = allocate<VkDescriptorImageInfo>(res.image_count);
-    res.image_view_create_info_array = allocate<VkImageViewCreateInfo>(res.image_count);
-
-    for (uint32_t i = 0; i < res.image_count; ++i) {
+    for (uint32_t i = 0; i < binding->image_count; ++i) {
         PyObject * item = PyList_GetItem(images, i);
 
         if (!PyDict_CheckExact(item)) {
-            PyErr_Format(PyExc_ValueError, "images");
-            return res;
+            return -1;
         }
+
         Image * image = (Image *)PyDict_GetItemString(item, "image");
 
-        if (!image) {
-            PyErr_Format(PyExc_KeyError, "image");
-            return res;
+        if (!image || Py_TYPE(image) != instance->state->Image_type) {
+            return -1;
         }
 
-        if (Py_TYPE(image) != instance->state->Image_type) {
-            PyErr_Format(PyExc_ValueError, "invalid image");
-            return res;
-        }
+        binding->image_view_array[i] = NULL;
+        binding->sampler_array[i] = NULL;
+        binding->image_array[i] = image;
 
-        res.image_view_array[i] = NULL;
-        res.sampler_array[i] = NULL;
-        res.image_array[i] = image;
-
-        res.sampler_create_info_array[i] = {
+        binding->sampler_create_info_array[i] = {
             VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
             NULL,
             0,
@@ -534,19 +536,19 @@ ImageBinding parse_image_binding(Instance * instance, PyObject * obj) {
             false,
         };
 
-        res.image_view_create_info_array[i] = {
+        binding->image_view_create_info_array[i] = {
             VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             NULL,
             0,
-            res.image_array[i]->image,
+            binding->image_array[i]->image,
             VK_IMAGE_VIEW_TYPE_2D,
-            res.image_array[i]->format,
+            binding->image_array[i]->format,
             {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, res.image_array[i]->layers},
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, binding->image_array[i]->layers},
         };
     }
 
-    return res;
+    return 0;
 }
 
 void new_temp_buffer(Instance * self, HostBuffer * temp, VkDeviceSize size) {

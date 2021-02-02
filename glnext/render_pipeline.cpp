@@ -140,24 +140,21 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     res->image_array = (ImageBinding *)PyMem_Malloc(sizeof(ImageBinding) * PyList_Size(args.images));
 
     for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        BufferBinding buffer_binding = parse_buffer_binding(self->instance, PyList_GetItem(args.buffers, i));
-        if (!buffer_binding.buffer) {
-            buffer_binding.buffer = new_buffer({
-                self->instance,
-                memory,
-                buffer_binding.size,
-                buffer_binding.usage,
-            });
-        }
-        if (PyErr_Occurred()) {
+        if (parse_buffer_binding(self->instance, &res->buffer_array[i], PyList_GetItem(args.buffers, i))) {
             return NULL;
         }
-        res->buffer_array[i] = buffer_binding;
+        if (!res->buffer_array[i].buffer) {
+            res->buffer_array[i].buffer = new_buffer({
+                self->instance,
+                memory,
+                res->buffer_array[i].size,
+                res->buffer_array[i].usage,
+            });
+        }
     }
 
     for (uint32_t i = 0; i < res->image_count; ++i) {
-        res->image_array[i] = parse_image_binding(self->instance, PyList_GetItem(args.images, i));
-        if (PyErr_Occurred()) {
+        if (parse_image_binding(self->instance, &res->image_array[i], PyList_GetItem(args.images, i))) {
             return NULL;
         }
     }

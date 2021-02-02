@@ -419,8 +419,8 @@ void staging_output_image(Image * self);
 
 void install_debug_messenger(Instance * instance);
 
-BufferBinding parse_buffer_binding(Instance * instance, PyObject * obj);
-ImageBinding parse_image_binding(Instance * instance, PyObject * obj);
+int parse_buffer_binding(Instance * instance, BufferBinding * binding, PyObject * obj);
+int parse_image_binding(Instance * instance, ImageBinding * binding, PyObject * obj);
 
 void execute_framebuffer(Framebuffer * self);
 void execute_render_pipeline(RenderPipeline * self);
