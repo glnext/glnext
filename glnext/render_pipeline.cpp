@@ -347,6 +347,10 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         &push_constant_range,
     };
 
+    res->descriptor_set_layout = NULL;
+    res->descriptor_pool = NULL;
+    res->descriptor_set = NULL;
+
     if (descriptor_binding_count) {
         VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
             VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
