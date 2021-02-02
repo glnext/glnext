@@ -39,6 +39,16 @@ PyMethodDef Framebuffer_methods[] = {
     {},
 };
 
+PyMethodDef RenderPipeline_methods[] = {
+    {"update", (PyCFunction)RenderPipeline_meth_update, METH_VARARGS | METH_KEYWORDS, NULL},
+    {},
+};
+
+PyMethodDef ComputePipeline_methods[] = {
+    {"update", (PyCFunction)ComputePipeline_meth_update, METH_VARARGS | METH_KEYWORDS, NULL},
+    {},
+};
+
 PyMethodDef Buffer_methods[] = {
     {"read", (PyCFunction)Buffer_meth_read, METH_NOARGS, NULL},
     {"write", (PyCFunction)Buffer_meth_write, METH_O, NULL},
@@ -96,6 +106,7 @@ PyType_Slot Framebuffer_slots[] = {
 };
 
 PyType_Slot RenderPipeline_slots[] = {
+    {Py_tp_methods, RenderPipeline_methods},
     {Py_tp_members, RenderPipeline_members},
     {Py_mp_subscript, RenderPipeline_subscript},
     {Py_tp_dealloc, default_dealloc},
@@ -103,6 +114,7 @@ PyType_Slot RenderPipeline_slots[] = {
 };
 
 PyType_Slot ComputePipeline_slots[] = {
+    {Py_tp_methods, ComputePipeline_methods},
     {Py_mp_subscript, ComputePipeline_subscript},
     {Py_tp_dealloc, default_dealloc},
     {},

@@ -317,6 +317,36 @@ ComputePipeline * Instance_meth_compute(Instance * self, PyObject * vargs, PyObj
     return res;
 }
 
+PyObject * ComputePipeline_meth_update(ComputePipeline * self, PyObject * vargs, PyObject * kwargs) {
+    if (PyTuple_Size(vargs) || !kwargs) {
+        PyErr_Format(PyExc_TypeError, "invalid arguments");
+    }
+
+    Py_ssize_t pos = 0;
+    PyObject * key = NULL;
+    PyObject * value = NULL;
+
+    while (PyDict_Next(kwargs, &pos, &key, &value)) {
+        if (!PyUnicode_CompareWithASCIIString(key, "compute_count")) {
+            if (!parse_compute_count(value, &self->compute_count)) {
+                return NULL;
+            }
+            continue;
+        }
+        PyObject * member = PyDict_GetItem(self->members, key);
+        if (!member) {
+            return NULL;
+        }
+        PyObject * res = PyObject_CallMethod(member, "write", "O", value);
+        if (!res) {
+            return NULL;
+        }
+        Py_DECREF(res);
+    }
+
+    Py_RETURN_NONE;
+}
+
 void execute_compute_pipeline(ComputePipeline * self) {
     self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, self->pipeline);
 

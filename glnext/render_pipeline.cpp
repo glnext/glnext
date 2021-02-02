@@ -580,6 +580,58 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     return res;
 }
 
+PyObject * RenderPipeline_meth_update(RenderPipeline * self, PyObject * vargs, PyObject * kwargs) {
+    if (PyTuple_Size(vargs) || !kwargs) {
+        PyErr_Format(PyExc_TypeError, "invalid arguments");
+    }
+
+    Py_ssize_t pos = 0;
+    PyObject * key = NULL;
+    PyObject * value = NULL;
+
+    while (PyDict_Next(kwargs, &pos, &key, &value)) {
+        if (!PyUnicode_CompareWithASCIIString(key, "vertex_count")) {
+            self->vertex_count = PyLong_AsUnsignedLong(value);
+            if (PyErr_Occurred()) {
+                return NULL;
+            }
+            continue;
+        }
+        if (!PyUnicode_CompareWithASCIIString(key, "instance_count")) {
+            self->instance_count = PyLong_AsUnsignedLong(value);
+            if (PyErr_Occurred()) {
+                return NULL;
+            }
+            continue;
+        }
+        if (!PyUnicode_CompareWithASCIIString(key, "index_count")) {
+            self->index_count = PyLong_AsUnsignedLong(value);
+            if (PyErr_Occurred()) {
+                return NULL;
+            }
+            continue;
+        }
+        if (!PyUnicode_CompareWithASCIIString(key, "indirect_count")) {
+            self->indirect_count = PyLong_AsUnsignedLong(value);
+            if (PyErr_Occurred()) {
+                return NULL;
+            }
+            continue;
+        }
+        PyObject * member = PyDict_GetItem(self->members, key);
+        if (!member) {
+            return NULL;
+        }
+        PyObject * res = PyObject_CallMethod(member, "write", "O", value);
+        if (!res) {
+            return NULL;
+        }
+        Py_DECREF(res);
+    }
+
+    Py_RETURN_NONE;
+}
+
 void execute_render_pipeline(RenderPipeline * self) {
     self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->pipeline);
 
