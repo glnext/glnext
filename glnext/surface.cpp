@@ -76,14 +76,15 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
 
     #ifdef BUILD_LINUX
     if (self->vkCreateXlibSurfaceKHR) {
-        Window wnd = (Window)PyLong_AsUnsignedLong(args.window);
+        Display * display = (Display *)PyLong_AsVoidPtr(PyTuple_GetItem(args.window, 0));
+        Window window = (Window)PyLong_AsUnsignedLong(PyTuple_GetItem(args.window, 1));
 
         VkXlibSurfaceCreateInfoKHR surface_create_info = {
             VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
             NULL,
             0,
-            NULL,
-            wnd,
+            display,
+            window,
         };
 
         self->vkCreateXlibSurfaceKHR(self->instance, &surface_create_info, NULL, &surface);
