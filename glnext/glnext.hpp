@@ -400,6 +400,16 @@ struct ImageCreateInfo {
     VkBool32 user_created;
 };
 
+struct BuildMipmapsInfo {
+    Instance * instance;
+    uint32_t width;
+    uint32_t height;
+    uint32_t levels;
+    uint32_t layers;
+    uint32_t image_count;
+    Image ** image_array;
+};
+
 template <typename T>
 T * allocate(uint32_t count) {
     return (T *)PyMem_Malloc(sizeof(T) * count);
@@ -446,6 +456,8 @@ void bind_buffer(Buffer * buffer);
 
 void new_temp_buffer(Instance * instance, HostBuffer * temp, VkDeviceSize size);
 void free_temp_buffer(Instance * instance, HostBuffer * temp);
+
+void build_mipmaps(BuildMipmapsInfo args);
 
 VkPrimitiveTopology get_topology(PyObject * name);
 ImageMode get_image_mode(PyObject * name);

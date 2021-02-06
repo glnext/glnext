@@ -64,6 +64,10 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
         image_layout = VK_IMAGE_LAYOUT_GENERAL;
     }
 
+    if (args.levels > 1) {
+        image_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+
     Image * res = new_image({
         self,
         memory,
@@ -94,7 +98,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
         VK_QUEUE_FAMILY_IGNORED,
         VK_QUEUE_FAMILY_IGNORED,
         res->image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, args.layers},
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, args.levels, 0, args.layers},
     };
 
     self->vkCmdPipelineBarrier(
@@ -228,7 +232,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
         &copy
     );
 
-    if (self->samples == 1) {
+    if (self->levels == 1) {
         VkImageMemoryBarrier image_barrier_general = {
             VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
             NULL,
@@ -255,15 +259,55 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
             &image_barrier_general
         );
     } else {
-        // build_mipmaps({
-        //     command_buffer,
-        //     self->extent.width,
-        //     self->extent.height,
-        //     self->levels,
-        //     self->layers,
-        //     1,
-        //     &self,
-        // });
+        VkImageMemoryBarrier image_barriers[] = {
+            {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
+            },
+            {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 1, self->levels - 1, 0, self->layers},
+            },
+        };
+
+        self->instance->vkCmdPipelineBarrier(
+            command_buffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            2,
+            image_barriers
+        );
+
+        build_mipmaps({
+            self->instance,
+            self->extent.width,
+            self->extent.height,
+            self->levels,
+            self->layers,
+            1,
+            &self,
+        });
     }
 
     end_commands(self->instance);

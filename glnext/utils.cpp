@@ -366,6 +366,95 @@ void free_temp_buffer(Instance * self, HostBuffer * temp) {
     self->vkDestroyBuffer(self->device, temp->buffer, NULL);
 }
 
+void build_mipmaps(BuildMipmapsInfo args) {
+    for (uint32_t level = 1; level < args.levels; ++level) {
+        uint32_t parent = level - 1;
+        VkImageBlit image_blit = {
+            {VK_IMAGE_ASPECT_COLOR_BIT, parent, 0, args.layers},
+            {{0, 0, 0}, {(int32_t)args.width >> parent, (int32_t)args.height >> parent, 1}},
+            {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, args.layers},
+            {{0, 0, 0}, {(int32_t)args.width >> level, (int32_t)args.height >> level, 1}},
+        };
+
+        for (uint32_t i = 0; i < args.image_count; ++i) {
+            args.instance->vkCmdBlitImage(
+                args.instance->command_buffer,
+                args.image_array[i]->image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                args.image_array[i]->image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1,
+                &image_blit,
+                VK_FILTER_LINEAR
+            );
+        }
+
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[64];
+
+        for (uint32_t i = 0; i < args.image_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                args.image_array[i]->image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, level, 1, 0, args.layers},
+            };
+        }
+
+        args.instance->vkCmdPipelineBarrier(
+            args.instance->command_buffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+
+    if (args.levels > 1) {
+        uint32_t image_barrier_count = 0;
+        VkImageMemoryBarrier image_barrier_array[128];
+
+        for (uint32_t i = 0; i < args.image_count; ++i) {
+            image_barrier_array[image_barrier_count++] = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                args.image_array[i]->image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, args.levels, 0, args.layers},
+            };
+        }
+
+        args.instance->vkCmdPipelineBarrier(
+            args.instance->command_buffer,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            0,
+            0,
+            NULL,
+            0,
+            NULL,
+            image_barrier_count,
+            image_barrier_array
+        );
+    }
+}
+
 VkPrimitiveTopology get_topology(PyObject * name) {
     if (!PyUnicode_CompareWithASCIIString(name, "points")) {
         return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;

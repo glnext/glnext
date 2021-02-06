@@ -379,7 +379,7 @@ int parse_image_binding(Instance * instance, ImageBinding * binding, PyObject * 
                 min_lod = (float)PyFloat_AsDouble(temp);
             }
 
-            float max_lod = 0.0f;
+            float max_lod = 1000.0f;
 
             if (PyObject * temp = PyDict_GetItemString(sampler, "max_lod")) {
                 if (!temp || !PyFloat_CheckExact(temp)) {
