@@ -27,6 +27,7 @@ PyMethodDef module_methods[] = {
 PyMethodDef Instance_methods[] = {
     {"framebuffer", (PyCFunction)Instance_meth_framebuffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"compute", (PyCFunction)Instance_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"buffer", (PyCFunction)Instance_meth_buffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
     {"staging_buffer", (PyCFunction)Instance_meth_staging_buffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
