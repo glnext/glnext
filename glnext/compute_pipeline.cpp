@@ -27,8 +27,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     static char * keywords[] = {
         "compute_shader",
         "compute_count",
-        "buffers",
-        "images",
+        "bindings",
         "memory",
         NULL,
     };
@@ -36,25 +35,22 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     struct {
         PyObject * compute_shader = Py_None;
         ComputeCount compute_count = {};
-        PyObject * buffers;
-        PyObject * images;
+        PyObject * bindings;
         PyObject * memory = Py_None;
     } args;
 
-    args.buffers = self->state->empty_list;
-    args.images = self->state->empty_list;
+    args.bindings = self->state->empty_list;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$O!O&OOO",
+        "|$O!O&OO",
         keywords,
         &PyBytes_Type,
         &args.compute_shader,
         parse_compute_count,
         &args.compute_count,
-        &args.buffers,
-        &args.images,
+        &args.bindings,
         &args.memory
     );
 
@@ -78,126 +74,33 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     res->members = PyDict_New();
     res->compute_count = args.compute_count;
 
-    res->buffer_count = (uint32_t)PyList_Size(args.buffers);
-    res->image_count = (uint32_t)PyList_Size(args.images);
+    res->binding_count = (uint32_t)PyList_Size(args.bindings);
+    res->binding_array = (DescriptorBinding *)PyMem_Malloc(sizeof(DescriptorBinding) * PyList_Size(args.bindings));
 
-    res->buffer_array = (BufferBinding *)PyMem_Malloc(sizeof(BufferBinding) * PyList_Size(args.buffers));
-    res->image_array = (ImageBinding *)PyMem_Malloc(sizeof(ImageBinding) * PyList_Size(args.images));
-
-    for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        if (parse_buffer_binding(self, &res->buffer_array[i], PyList_GetItem(args.buffers, i))) {
+    for (uint32_t i = 0; i < res->binding_count; ++i) {
+        if (parse_descriptor_binding(self, &res->binding_array[i], PyList_GetItem(args.bindings, i))) {
             return NULL;
-        }
-        if (!res->buffer_array[i].buffer) {
-            res->buffer_array[i].buffer = new_buffer({
-                self,
-                memory,
-                res->buffer_array[i].size,
-                res->buffer_array[i].usage,
-            });
         }
     }
 
-    for (uint32_t i = 0; i < res->image_count; ++i) {
-        if (parse_image_binding(self, &res->image_array[i], PyList_GetItem(args.images, i))) {
-            return NULL;
-        }
+    for (uint32_t i = 0; i < res->binding_count; ++i) {
+        create_descriptor_binding_objects(self, &res->binding_array[i], memory);
     }
 
     allocate_memory(memory);
 
-    for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        bind_buffer(res->buffer_array[i].buffer);
+    for (uint32_t i = 0; i < res->binding_count; ++i) {
+        bind_descriptor_binding_objects(self, &res->binding_array[i]);
     }
 
-    for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        res->buffer_array[i].descriptor_buffer_info.buffer = res->buffer_array[i].buffer->buffer;
-    }
+    res->descriptor_binding_array = (VkDescriptorSetLayoutBinding *)PyMem_Malloc(sizeof(VkDescriptorSetLayoutBinding) * res->binding_count);
+    res->descriptor_pool_size_array = (VkDescriptorPoolSize *)PyMem_Malloc(sizeof(VkDescriptorPoolSize) * res->binding_count);
+    res->write_descriptor_set_array = (VkWriteDescriptorSet *)PyMem_Malloc(sizeof(VkWriteDescriptorSet) * res->binding_count);
 
-    for (uint32_t i = 0; i < res->image_count; ++i) {
-        ImageBinding & image_binding = res->image_array[i];
-        for (uint32_t j = 0; j < image_binding.image_count; ++j) {
-            VkImageView image_view = NULL;
-            self->vkCreateImageView(
-                self->device,
-                &image_binding.image_view_create_info_array[j],
-                NULL,
-                &image_view
-            );
-            VkSampler sampler = NULL;
-            if (image_binding.sampled) {
-                self->vkCreateSampler(
-                    self->device,
-                    &image_binding.sampler_create_info_array[j],
-                    NULL,
-                    &sampler
-                );
-            }
-            image_binding.sampler_array[j] = sampler;
-            image_binding.image_view_array[j] = image_view;
-            image_binding.descriptor_image_info_array[j] = {
-                sampler,
-                image_view,
-                image_binding.layout,
-            };
-        }
-    }
-
-    uint32_t descriptor_binding_count = res->buffer_count + res->image_count;
-    res->descriptor_binding_array = (VkDescriptorSetLayoutBinding *)PyMem_Malloc(sizeof(VkDescriptorSetLayoutBinding) * descriptor_binding_count);
-    res->descriptor_pool_size_array = (VkDescriptorPoolSize *)PyMem_Malloc(sizeof(VkDescriptorPoolSize) * descriptor_binding_count);
-    res->write_descriptor_set_array = (VkWriteDescriptorSet *)PyMem_Malloc(sizeof(VkWriteDescriptorSet) * descriptor_binding_count);
-
-    for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        res->descriptor_binding_array[i] = {
-            res->buffer_array[i].binding,
-            res->buffer_array[i].descriptor_type,
-            1,
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            NULL,
-        };
-        res->descriptor_pool_size_array[i] = {
-            res->buffer_array[i].descriptor_type,
-            1,
-        };
-        res->write_descriptor_set_array[i] = {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            NULL,
-            res->buffer_array[i].binding,
-            0,
-            1,
-            res->buffer_array[i].descriptor_type,
-            NULL,
-            &res->buffer_array[i].descriptor_buffer_info,
-            NULL,
-        };
-    }
-
-    for (uint32_t i = 0; i < res->image_count; ++i) {
-        res->descriptor_binding_array[res->buffer_count + i] = {
-            res->image_array[i].binding,
-            res->image_array[i].descriptor_type,
-            1,
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            NULL,
-        };
-        res->descriptor_pool_size_array[res->buffer_count + i] = {
-            res->image_array[i].descriptor_type,
-            1,
-        };
-        res->write_descriptor_set_array[res->buffer_count + i] = {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            NULL,
-            res->image_array[i].binding,
-            0,
-            1,
-            res->image_array[i].descriptor_type,
-            res->image_array[i].descriptor_image_info_array,
-            NULL,
-            NULL,
-        };
+    for (uint32_t i = 0; i < res->binding_count; ++i) {
+        res->descriptor_binding_array[i] = res->binding_array[i].descriptor_binding;
+        res->descriptor_pool_size_array[i] = res->binding_array[i].descriptor_pool_size;
+        res->write_descriptor_set_array[i] = res->binding_array[i].write_descriptor_set;
     }
 
     VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
@@ -210,12 +113,12 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         NULL,
     };
 
-    if (descriptor_binding_count) {
+    if (res->binding_count) {
         VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
             VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             NULL,
             0,
-            descriptor_binding_count,
+            res->binding_count,
             res->descriptor_binding_array,
         };
 
@@ -229,7 +132,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
             NULL,
             0,
             1,
-            descriptor_binding_count,
+            res->binding_count,
             res->descriptor_pool_size_array,
         };
 
@@ -245,13 +148,13 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
 
         self->vkAllocateDescriptorSets(self->device, &descriptor_set_allocate_info, &res->descriptor_set);
 
-        for (uint32_t i = 0; i < descriptor_binding_count; ++i) {
+        for (uint32_t i = 0; i < res->binding_count; ++i) {
             res->write_descriptor_set_array[i].dstSet = res->descriptor_set;
         }
 
         self->vkUpdateDescriptorSets(
             self->device,
-            descriptor_binding_count,
+            res->binding_count,
             res->write_descriptor_set_array,
             NULL,
             NULL
@@ -290,9 +193,11 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
 
     self->vkCreateComputePipelines(self->device, NULL, 1, &compute_pipeline_create_info, NULL, &res->pipeline);
 
-    for (uint32_t i = 0; i < res->buffer_count; ++i) {
-        if (res->buffer_array[i].name != Py_None) {
-            PyDict_SetItem(res->members, res->buffer_array[i].name, (PyObject *)res->buffer_array[i].buffer);
+    for (uint32_t i = 0; i < res->binding_count; ++i) {
+        if (res->binding_array[i].name) {
+            if (res->binding_array[i].is_buffer) {
+                PyDict_SetItem(res->members, res->binding_array[i].name, (PyObject *)res->binding_array[i].buffer.buffer);
+            }
         }
     }
 

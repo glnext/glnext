@@ -46,7 +46,7 @@ pipeline = framebuffer.render(
         }
     '''),
     vertex_count=3,
-    buffers=[
+    bindings=[
         {
             'binding': 0,
             'name': 'uniform_buffer',

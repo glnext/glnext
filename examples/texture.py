@@ -40,7 +40,7 @@ pipeline = framebuffer.render(
     '''),
     vertex_format='2f 2f',
     vertex_count=3,
-    images=[
+    bindings=[
         {
             'binding': 0,
             'type': 'sampled_image',

@@ -222,30 +222,34 @@ struct Image;
 struct Buffer;
 struct StagingBuffer;
 
-struct BufferBinding {
+struct DescriptorBinding {
+    PyObject * type;
     PyObject * name;
     uint32_t binding;
-    Buffer * buffer;
-    VkDeviceSize size;
-    VkBufferUsageFlags usage;
     VkDescriptorType descriptor_type;
-    VkDescriptorBufferInfo descriptor_buffer_info;
-    BufferMode mode;
-};
-
-struct ImageBinding {
-    PyObject * name;
-    uint32_t binding;
-    VkBool32 sampled;
-    uint32_t image_count;
-    Image ** image_array;
-    VkDescriptorImageInfo * descriptor_image_info_array;
-    VkImageViewCreateInfo * image_view_create_info_array;
-    VkSamplerCreateInfo * sampler_create_info_array;
-    VkImageView * image_view_array;
-    VkSampler * sampler_array;
-    VkDescriptorType descriptor_type;
-    VkImageLayout layout;
+    bool is_buffer;
+    bool is_image;
+    struct {
+        Buffer * buffer;
+        VkDeviceSize size;
+        VkBufferUsageFlags usage;
+        VkDescriptorBufferInfo descriptor_buffer_info;
+        BufferMode mode;
+    } buffer;
+    struct {
+        VkBool32 sampled;
+        uint32_t image_count;
+        Image ** image_array;
+        VkDescriptorImageInfo * descriptor_image_info_array;
+        VkImageViewCreateInfo * image_view_create_info_array;
+        VkSamplerCreateInfo * sampler_create_info_array;
+        VkImageView * image_view_array;
+        VkSampler * sampler_array;
+        VkImageLayout layout;
+    } image;
+    VkDescriptorSetLayoutBinding descriptor_binding;
+    VkDescriptorPoolSize descriptor_pool_size;
+    VkWriteDescriptorSet write_descriptor_set;
 };
 
 struct Framebuffer {
@@ -286,10 +290,8 @@ struct RenderPipeline {
     Buffer * instance_buffer;
     Buffer * index_buffer;
     Buffer * indirect_buffer;
-    uint32_t buffer_count;
-    uint32_t image_count;
-    BufferBinding * buffer_array;
-    ImageBinding * image_array;
+    uint32_t binding_count;
+    DescriptorBinding * binding_array;
     VkDescriptorSetLayoutBinding * descriptor_binding_array;
     VkDescriptorPoolSize * descriptor_pool_size_array;
     VkWriteDescriptorSet * write_descriptor_set_array;
@@ -310,10 +312,8 @@ struct ComputePipeline {
     PyObject_HEAD
     Instance * instance;
     ComputeCount compute_count;
-    uint32_t buffer_count;
-    uint32_t image_count;
-    BufferBinding * buffer_array;
-    ImageBinding * image_array;
+    uint32_t binding_count;
+    DescriptorBinding * binding_array;
     VkDescriptorSetLayoutBinding * descriptor_binding_array;
     VkDescriptorPoolSize * descriptor_pool_size_array;
     VkWriteDescriptorSet * write_descriptor_set_array;
@@ -429,8 +429,9 @@ void staging_output_image(Image * self);
 
 void install_debug_messenger(Instance * instance);
 
-int parse_buffer_binding(Instance * instance, BufferBinding * binding, PyObject * obj);
-int parse_image_binding(Instance * instance, ImageBinding * binding, PyObject * obj);
+int parse_descriptor_binding(Instance * instance, DescriptorBinding * binding, PyObject * obj);
+void create_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding, Memory * memory);
+void bind_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding);
 
 void execute_framebuffer(Framebuffer * self);
 void execute_render_pipeline(RenderPipeline * self);

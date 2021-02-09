@@ -47,7 +47,7 @@ pipeline = framebuffer.render(
     '''),
     vertex_format='3f 3f',
     vertex_count=36,
-    buffers=[
+    bindings=[
         {
             'binding': 0,
             'name': 'uniform_buffer',

@@ -46,15 +46,13 @@ pipeline = framebuffer.render(
     vertex_format='3f 2f',
     vertex_count=4,
     topology='triangle_strip',
-    buffers=[
+    bindings=[
         {
             'binding': 0,
             'name': 'uniform_buffer',
             'type': 'uniform_buffer',
             'size': 64,
         },
-    ],
-    images=[
         {
             'binding': 1,
             'type': 'sampled_image',
