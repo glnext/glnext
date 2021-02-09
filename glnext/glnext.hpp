@@ -433,6 +433,7 @@ int parse_descriptor_binding(Instance * instance, DescriptorBinding * binding, P
 void create_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding, Memory * memory);
 void bind_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding);
 
+void execute_instance(Instance * self);
 void execute_framebuffer(Framebuffer * self);
 void execute_render_pipeline(RenderPipeline * self);
 void execute_compute_pipeline(ComputePipeline * self);

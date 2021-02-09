@@ -262,11 +262,11 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     return res;
 }
 
-PyObject * Instance_meth_run(Instance * self) {
+void execute_instance(Instance * self) {
     begin_commands(self);
 
-    for (uint32_t i = 0; i < PyList_Size(self->staged_inputs); ++i) {
-        PyObject * item = PyList_GetItem(self->staged_inputs, i);
+    for (uint32_t i = 0; i < PyList_GET_SIZE(self->staged_inputs); ++i) {
+        PyObject * item = PyList_GET_ITEM(self->staged_inputs, i);
         if (Py_TYPE(item) == self->state->Buffer_type) {
             staging_input_buffer((Buffer *)item);
         }
@@ -275,8 +275,8 @@ PyObject * Instance_meth_run(Instance * self) {
         }
     }
 
-    for (uint32_t i = 0; i < PyList_Size(self->task_list); ++i) {
-        PyObject * task = PyList_GetItem(self->task_list, i);
+    for (uint32_t i = 0; i < PyList_GET_SIZE(self->task_list); ++i) {
+        PyObject * task = PyList_GET_ITEM(self->task_list, i);
         if (Py_TYPE(task) == self->state->Framebuffer_type) {
             execute_framebuffer((Framebuffer *)task);
         }
@@ -285,8 +285,8 @@ PyObject * Instance_meth_run(Instance * self) {
         }
     }
 
-    for (uint32_t i = 0; i < PyList_Size(self->staged_outputs); ++i) {
-        PyObject * item = PyList_GetItem(self->staged_outputs, i);
+    for (uint32_t i = 0; i < PyList_GET_SIZE(self->staged_outputs); ++i) {
+        PyObject * item = PyList_GET_ITEM(self->staged_outputs, i);
         if (Py_TYPE(item) == self->state->Buffer_type) {
             staging_output_buffer((Buffer *)item);
         }
@@ -300,5 +300,9 @@ PyObject * Instance_meth_run(Instance * self) {
     } else {
         end_commands(self);
     }
+}
+
+PyObject * Instance_meth_run(Instance * self) {
+    execute_instance(self);
     Py_RETURN_NONE;
 }
