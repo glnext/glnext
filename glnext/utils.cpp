@@ -656,7 +656,7 @@ Format get_format(PyObject * name) {
 
 template <typename T>
 void realloc_array(T ** array, uint32_t size) {
-    *array = (T *)PyMem_Realloc(*array, sizeof(T) * size);
+    *array = (T *)realloc(*array, sizeof(T) * size);
 }
 
 void presenter_resize(Presenter * self) {
