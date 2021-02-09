@@ -85,6 +85,7 @@ StagingBuffer * Instance_meth_staging_buffer(Instance * self, PyObject * vargs, 
     self->vkBindBufferMemory(self->device, res->buffer, res->memory, 0);
 
     res->mem = PyMemoryView_FromMemory((char *)res->ptr, res->size, PyBUF_WRITE);
+    Py_INCREF(res);
     return res;
 }
 
