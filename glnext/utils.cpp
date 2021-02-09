@@ -673,7 +673,6 @@ void presenter_resize(Presenter * self) {
 }
 
 void presenter_remove(Presenter * self, uint32_t index) {
-    PyMem_Free(self->image_array[index]);
     self->surface_count -= 1;
     for (uint32_t i = index; i < self->surface_count; ++i) {
         self->surface_array[i] = self->surface_array[i + 1];
