@@ -337,8 +337,8 @@ void execute_framebuffer(Framebuffer * self) {
         VkRect2D scissor = {{0, 0}, {self->width, self->height}};
         self->instance->vkCmdSetScissor(self->instance->command_buffer, 0, 1, &scissor);
 
-        for (uint32_t i = 0; i < PyList_Size(self->render_pipeline_list); ++i) {
-            RenderPipeline * pipeline = (RenderPipeline *)PyList_GetItem(self->render_pipeline_list, i);
+        for (uint32_t i = 0; i < PyList_GET_SIZE(self->render_pipeline_list); ++i) {
+            RenderPipeline * pipeline = (RenderPipeline *)PyList_GET_ITEM(self->render_pipeline_list, i);
 
             self->instance->vkCmdPushConstants(
                 self->instance->command_buffer,
@@ -354,8 +354,8 @@ void execute_framebuffer(Framebuffer * self) {
 
         self->instance->vkCmdEndRenderPass(self->instance->command_buffer);
 
-        for (uint32_t i = 0; i < PyList_Size(self->compute_pipeline_list); ++i) {
-            ComputePipeline * pipeline = (ComputePipeline *)PyList_GetItem(self->compute_pipeline_list, i);
+        for (uint32_t i = 0; i < PyList_GET_SIZE(self->compute_pipeline_list); ++i) {
+            ComputePipeline * pipeline = (ComputePipeline *)PyList_GET_ITEM(self->compute_pipeline_list, i);
             execute_compute_pipeline(pipeline);
         }
 
