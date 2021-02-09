@@ -160,7 +160,7 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
 
     uint32_t swapchain_image_count = 0;
     self->vkGetSwapchainImagesKHR(self->device, swapchain, &swapchain_image_count, NULL);
-    VkImage * swapchain_image_array = (VkImage *)PyMem_Malloc(sizeof(VkImage) * swapchain_image_count);
+    VkImage * swapchain_image_array = (VkImage *)malloc(sizeof(VkImage) * swapchain_image_count);
     self->vkGetSwapchainImagesKHR(self->device, swapchain, &swapchain_image_count, swapchain_image_array);
 
     uint32_t idx = self->presenter.surface_count++;
