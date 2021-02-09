@@ -60,13 +60,14 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
 
     #ifdef BUILD_WINDOWS
     if (self->vkCreateWin32SurfaceKHR) {
-        HWND hwnd = (HWND)PyLong_AsVoidPtr(args.window);
+        HINSTANCE hinstance = (HINSTANCE)PyLong_AsVoidPtr(PyTuple_GetItem(args.window, 0));
+        HWND hwnd = (HWND)PyLong_AsVoidPtr(PyTuple_GetItem(args.window, 1));
 
         VkWin32SurfaceCreateInfoKHR surface_create_info = {
             VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
             NULL,
             0,
-            NULL,
+            hinstance,
             hwnd,
         };
 
