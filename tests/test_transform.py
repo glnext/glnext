@@ -22,7 +22,7 @@ def test_transform_input_output(instance):
                 result[gl_GlobalInvocationID.x] = number[gl_GlobalInvocationID.x] + 1;
             }
         '''),
-        buffers=[
+        bindings=[
             {
                 'binding': 0,
                 'name': 'input_buffer',
