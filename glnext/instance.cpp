@@ -273,6 +273,12 @@ void execute_instance(Instance * self) {
         if (Py_TYPE(item) == self->state->Image_type) {
             staging_input_image((Image *)item);
         }
+        if (Py_TYPE(item) == self->state->RenderPipeline_type) {
+            staging_render_parameters((RenderPipeline *)item);
+        }
+        if (Py_TYPE(item) == self->state->ComputePipeline_type) {
+            staging_compute_parameters((ComputePipeline *)item);
+        }
     }
 
     for (uint32_t i = 0; i < PyList_GET_SIZE(self->task_list); ++i) {

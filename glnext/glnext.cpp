@@ -29,7 +29,7 @@ PyMethodDef Instance_methods[] = {
     {"compute", (PyCFunction)Instance_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
     {"buffer", (PyCFunction)Instance_meth_buffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"staging_buffer", (PyCFunction)Instance_meth_staging_buffer, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"staging", (PyCFunction)Instance_meth_staging, METH_VARARGS | METH_KEYWORDS, NULL},
     {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
     {"run", (PyCFunction)Instance_meth_run, METH_NOARGS, NULL},
     {},
@@ -86,6 +86,7 @@ PyMemberDef RenderPipeline_members[] = {
 
 PyMemberDef StagingBuffer_members[] = {
     {"mem", T_OBJECT_EX, offsetof(StagingBuffer, mem), READONLY, NULL},
+    {"ptr", T_ULONGLONG, offsetof(StagingBuffer, ptr), READONLY, NULL},
     {},
 };
 

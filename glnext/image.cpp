@@ -155,11 +155,6 @@ PyObject * Image_meth_read(Image * self) {
 }
 
 PyObject * Image_meth_write(Image * self, PyObject * arg) {
-    if (self->staging_buffer) {
-        PyErr_Format(PyExc_ValueError, "staged");
-        return NULL;
-    }
-
     Py_buffer view = {};
     if (PyObject_GetBuffer(arg, &view, PyBUF_STRIDED_RO)) {
         return NULL;

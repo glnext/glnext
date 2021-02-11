@@ -49,6 +49,19 @@ enum BufferMode {
     BUF_OUTPUT,
 };
 
+struct RenderParameters {
+    VkBool32 enabled;
+    uint32_t vertex_count;
+    uint32_t instance_count;
+    uint32_t index_count;
+    uint32_t indirect_count;
+};
+
+struct ComputeParameters {
+    VkBool32 enabled;
+    uint32_t x, y, z;
+};
+
 typedef void (* Packer)(char * ptr, PyObject ** obj);
 
 struct Format {
@@ -62,10 +75,6 @@ struct HostBuffer {
     VkBuffer buffer;
     VkDeviceMemory memory;
     void * ptr;
-};
-
-struct ComputeCount {
-    uint32_t x, y, z;
 };
 
 struct Presenter {
@@ -282,10 +291,7 @@ struct Framebuffer {
 struct RenderPipeline {
     PyObject_HEAD
     Instance * instance;
-    uint32_t vertex_count;
-    uint32_t instance_count;
-    uint32_t index_count;
-    uint32_t indirect_count;
+    RenderParameters parameters;
     Buffer * vertex_buffer;
     Buffer * instance_buffer;
     Buffer * index_buffer;
@@ -305,13 +311,15 @@ struct RenderPipeline {
     VkBuffer * attribute_buffer_array;
     VkDeviceSize * attribute_offset_array;
     VkPipeline pipeline;
+    StagingBuffer * staging_buffer;
+    VkDeviceSize staging_offset;
     PyObject * members;
 };
 
 struct ComputePipeline {
     PyObject_HEAD
     Instance * instance;
-    ComputeCount compute_count;
+    ComputeParameters parameters;
     uint32_t binding_count;
     DescriptorBinding * binding_array;
     VkDescriptorSetLayoutBinding * descriptor_binding_array;
@@ -323,7 +331,8 @@ struct ComputePipeline {
     VkDescriptorSet descriptor_set;
     VkShaderModule compute_shader_module;
     VkPipeline pipeline;
-    Buffer * uniform_buffer;
+    StagingBuffer * staging_buffer;
+    VkDeviceSize staging_offset;
     PyObject * members;
 };
 
@@ -426,6 +435,8 @@ void staging_input_buffer(Buffer * self);
 void staging_output_buffer(Buffer * self);
 void staging_input_image(Image * self);
 void staging_output_image(Image * self);
+void staging_render_parameters(RenderPipeline * self);
+void staging_compute_parameters(ComputePipeline * self);
 
 void install_debug_messenger(Instance * instance);
 

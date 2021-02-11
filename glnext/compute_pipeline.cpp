@@ -1,23 +1,24 @@
 #include "glnext.hpp"
 
-int parse_compute_count(PyObject * arg, ComputeCount * compute_count) {
+int parse_compute_count(PyObject * arg, uint32_t * compute_count) {
     if (PyLong_Check(arg)) {
-        compute_count->x = PyLong_AsUnsignedLong(arg);
-        compute_count->y = 1;
-        compute_count->z = 1;
+        compute_count[0] = PyLong_AsUnsignedLong(arg);
+        compute_count[1] = 1;
+        compute_count[2] = 1;
     } else if (PyTuple_Check(arg) && PyTuple_Size(arg) == 2) {
-        compute_count->x = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 0));
-        compute_count->y = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 1));
-        compute_count->z = 1;
+        compute_count[0] = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 0));
+        compute_count[1] = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 1));
+        compute_count[2] = 1;
     } else if (PyTuple_Check(arg) && PyTuple_Size(arg) == 3) {
-        compute_count->x = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 0));
-        compute_count->y = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 1));
-        compute_count->z = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 2));
+        compute_count[0] = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 0));
+        compute_count[1] = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 1));
+        compute_count[2] = PyLong_AsUnsignedLong(PyTuple_GetItem(arg, 2));
     } else {
         PyErr_Format(PyExc_TypeError, "compute_count");
         return 0;
     }
     if (PyErr_Occurred()) {
+        PyErr_Format(PyExc_TypeError, "compute_count");
         return 0;
     }
     return 1;
@@ -34,7 +35,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
 
     struct {
         PyObject * compute_shader = Py_None;
-        ComputeCount compute_count = {};
+        uint32_t compute_count[3] = {};
         PyObject * bindings;
         PyObject * memory = Py_None;
     } args;
@@ -49,7 +50,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         &PyBytes_Type,
         &args.compute_shader,
         parse_compute_count,
-        &args.compute_count,
+        args.compute_count,
         &args.bindings,
         &args.memory
     );
@@ -62,7 +63,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         return NULL;
     }
 
-    if (!args.compute_count.x || !args.compute_count.y || !args.compute_count.z) {
+    if (!args.compute_count[0] || !args.compute_count[1] || !args.compute_count[2]) {
         return NULL;
     }
 
@@ -71,8 +72,16 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     ComputePipeline * res = PyObject_New(ComputePipeline, self->state->ComputePipeline_type);
 
     res->instance = self;
+    res->staging_buffer = NULL;
+    res->staging_offset = 0;
     res->members = PyDict_New();
-    res->compute_count = args.compute_count;
+
+    res->parameters = {
+        true,
+        args.compute_count[0],
+        args.compute_count[1],
+        args.compute_count[2],
+    };
 
     res->binding_count = (uint32_t)PyList_Size(args.bindings);
     res->binding_array = (DescriptorBinding *)PyMem_Malloc(sizeof(DescriptorBinding) * PyList_Size(args.bindings));
@@ -236,9 +245,13 @@ PyObject * ComputePipeline_meth_update(ComputePipeline * self, PyObject * vargs,
 
     while (PyDict_Next(kwargs, &pos, &key, &value)) {
         if (!PyUnicode_CompareWithASCIIString(key, "compute_count")) {
-            if (!parse_compute_count(value, &self->compute_count)) {
+            uint32_t compute_count[3];
+            if (!parse_compute_count(value, compute_count)) {
                 return NULL;
             }
+            self->parameters.x = compute_count[0];
+            self->parameters.y = compute_count[1];
+            self->parameters.z = compute_count[2];
             continue;
         }
         PyObject * member = PyDict_GetItem(self->members, key);
@@ -256,6 +269,10 @@ PyObject * ComputePipeline_meth_update(ComputePipeline * self, PyObject * vargs,
 }
 
 void execute_compute_pipeline(ComputePipeline * self) {
+    if (!self->parameters.enabled) {
+        return;
+    }
+
     self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, self->pipeline);
 
     self->instance->vkCmdBindDescriptorSets(
@@ -269,7 +286,7 @@ void execute_compute_pipeline(ComputePipeline * self) {
         NULL
     );
 
-    self->instance->vkCmdDispatch(self->instance->command_buffer, self->compute_count.x, self->compute_count.x, self->compute_count.z);
+    self->instance->vkCmdDispatch(self->instance->command_buffer, self->parameters.x, self->parameters.x, self->parameters.z);
 }
 
 PyObject * ComputePipeline_subscript(ComputePipeline * self, PyObject * key) {

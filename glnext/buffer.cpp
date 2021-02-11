@@ -21,7 +21,7 @@ Buffer * Instance_meth_buffer(Instance * self, PyObject * vargs, PyObject * kwar
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "O!k|$ppO",
+        "O!K|$ppO",
         keywords,
         &PyUnicode_Type,
         &args.type,
@@ -107,11 +107,6 @@ PyObject * Buffer_meth_read(Buffer * self) {
 }
 
 PyObject * Buffer_meth_write(Buffer * self, PyObject * arg) {
-    if (self->staging_buffer) {
-        PyErr_Format(PyExc_ValueError, "staged");
-        return NULL;
-    }
-
     Py_buffer view = {};
     if (PyObject_GetBuffer(arg, &view, PyBUF_STRIDED_RO)) {
         return NULL;

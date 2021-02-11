@@ -76,6 +76,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     RenderPipeline * res = PyObject_New(RenderPipeline, self->instance->state->RenderPipeline_type);
 
     res->instance = self->instance;
+    res->staging_buffer = NULL;
+    res->staging_offset = 0;
     res->members = PyDict_New();
 
     PyObject * vertex_format = PyUnicode_Split(args.vertex_format, NULL, -1);
@@ -120,10 +122,13 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         args.vertex_count = (uint32_t)PyBytes_Size(args.vertex_buffer) / vstride;
     }
 
-    res->vertex_count = args.vertex_count;
-    res->instance_count = args.instance_count;
-    res->index_count = args.index_count;
-    res->indirect_count = args.indirect_count;
+    res->parameters = {
+        true,
+        args.vertex_count,
+        args.instance_count,
+        args.index_count,
+        args.indirect_count,
+    };
 
     VkBool32 short_index = false;
     uint32_t index_size = short_index ? 2 : 4;
@@ -503,28 +508,28 @@ PyObject * RenderPipeline_meth_update(RenderPipeline * self, PyObject * vargs, P
 
     while (PyDict_Next(kwargs, &pos, &key, &value)) {
         if (!PyUnicode_CompareWithASCIIString(key, "vertex_count")) {
-            self->vertex_count = PyLong_AsUnsignedLong(value);
+            self->parameters.vertex_count = PyLong_AsUnsignedLong(value);
             if (PyErr_Occurred()) {
                 return NULL;
             }
             continue;
         }
         if (!PyUnicode_CompareWithASCIIString(key, "instance_count")) {
-            self->instance_count = PyLong_AsUnsignedLong(value);
+            self->parameters.instance_count = PyLong_AsUnsignedLong(value);
             if (PyErr_Occurred()) {
                 return NULL;
             }
             continue;
         }
         if (!PyUnicode_CompareWithASCIIString(key, "index_count")) {
-            self->index_count = PyLong_AsUnsignedLong(value);
+            self->parameters.index_count = PyLong_AsUnsignedLong(value);
             if (PyErr_Occurred()) {
                 return NULL;
             }
             continue;
         }
         if (!PyUnicode_CompareWithASCIIString(key, "indirect_count")) {
-            self->indirect_count = PyLong_AsUnsignedLong(value);
+            self->parameters.indirect_count = PyLong_AsUnsignedLong(value);
             if (PyErr_Occurred()) {
                 return NULL;
             }
@@ -545,6 +550,10 @@ PyObject * RenderPipeline_meth_update(RenderPipeline * self, PyObject * vargs, P
 }
 
 void execute_render_pipeline(RenderPipeline * self) {
+    if (!self->parameters.enabled) {
+        return;
+    }
+
     self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->pipeline);
 
     if (self->attribute_count) {
@@ -579,14 +588,14 @@ void execute_render_pipeline(RenderPipeline * self) {
         );
     }
 
-    if (self->indirect_count && self->index_count) {
-        self->instance->vkCmdDrawIndexedIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->indirect_count, 20);
-    } else if (self->indirect_count) {
-        self->instance->vkCmdDrawIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->indirect_count, 16);
-    } else if (self->index_count) {
-        self->instance->vkCmdDrawIndexed(self->instance->command_buffer, self->index_count, self->instance_count, 0, 0, 0);
+    if (self->parameters.indirect_count && self->parameters.index_count) {
+        self->instance->vkCmdDrawIndexedIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 20);
+    } else if (self->parameters.indirect_count) {
+        self->instance->vkCmdDrawIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 16);
+    } else if (self->parameters.index_count) {
+        self->instance->vkCmdDrawIndexed(self->instance->command_buffer, self->parameters.index_count, self->parameters.instance_count, 0, 0, 0);
     } else {
-        self->instance->vkCmdDraw(self->instance->command_buffer, self->vertex_count, self->instance_count, 0, 0);
+        self->instance->vkCmdDraw(self->instance->command_buffer, self->parameters.vertex_count, self->parameters.instance_count, 0, 0);
     }
 }
 
