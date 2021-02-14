@@ -164,7 +164,7 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
                 args.layers,
                 IMG_PROTECTED,
                 format.format,
-            false,
+                false,
             });
         }
     }
