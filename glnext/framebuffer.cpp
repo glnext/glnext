@@ -409,11 +409,19 @@ PyObject * Framebuffer_meth_update(Framebuffer * self, PyObject * vargs, PyObjec
                 PyBuffer_Release(&view);
                 return NULL;
             }
-            PyBuffer_ToContiguous(self->clear_value_array, &view, view.len, 'C');
+            VkClearValue * ptr = self->clear_value_array;
+            if (self->samples > 1) {
+                ptr = self->clear_value_array + self->attachment_count - self->output_count;
+            }
+            PyBuffer_ToContiguous(ptr, &view, view.len, 'C');
             PyBuffer_Release(&view);
             continue;
         }
         if (!PyUnicode_CompareWithASCIIString(key, "clear_depth")) {
+            if (!self->depth) {
+                PyErr_Format(PyExc_ValueError, "clear_depth");
+                return NULL;
+            }
             self->clear_value_array[self->output_count].depthStencil.depth = (float)PyFloat_AsDouble(value);
             if (PyErr_Occurred()) {
                 return NULL;
