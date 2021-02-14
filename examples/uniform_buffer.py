@@ -51,7 +51,7 @@ pipeline = framebuffer.render(
             'binding': 0,
             'name': 'uniform_buffer',
             'type': 'uniform_buffer',
-            'size': 64 * 1024,
+            'size': 8,
         },
     ],
 )
