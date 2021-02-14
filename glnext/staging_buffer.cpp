@@ -80,12 +80,12 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
             is_output = true;
         }
 
-        if (!PyUnicode_CompareWithASCIIString(type, "render_parameter")) {
+        if (!PyUnicode_CompareWithASCIIString(type, "render_parameters")) {
             is_render_pipeline = true;
             is_input = true;
         }
 
-        if (!PyUnicode_CompareWithASCIIString(type, "compute_parameter")) {
+        if (!PyUnicode_CompareWithASCIIString(type, "compute_parameters")) {
             is_compute_pipeline = true;
             is_input = true;
         }
