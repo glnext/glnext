@@ -64,7 +64,7 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
         attachment_count += 1;
     }
 
-    if (args.samples) {
+    if (args.samples > 1) {
         attachment_count += output_count;
     }
 
@@ -149,7 +149,7 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
         });
     }
 
-    if (args.samples) {
+    if (args.samples > 1) {
         for (uint32_t i = 0; i < output_count; ++i) {
             Format format = get_format(PyList_GetItem(format_list, i));
             res->image_array[attachment_count - output_count + i] = new_image({
@@ -218,7 +218,7 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
         subpass_description.pDepthStencilAttachment = res->reference_array + output_count;
     }
 
-    if (args.samples) {
+    if (args.samples > 1) {
         for (uint32_t i = 0; i < output_count; ++i) {
             res->description_array[attachment_count - output_count + i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             res->description_array[i].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
