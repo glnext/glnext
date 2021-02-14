@@ -38,6 +38,7 @@ PyMethodDef Instance_methods[] = {
 PyMethodDef Framebuffer_methods[] = {
     {"compute", (PyCFunction)Framebuffer_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
     {"render", (PyCFunction)Framebuffer_meth_render, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"update", (PyCFunction)Framebuffer_meth_update, METH_VARARGS | METH_KEYWORDS, NULL},
     {},
 };
 

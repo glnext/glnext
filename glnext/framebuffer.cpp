@@ -388,3 +388,39 @@ void execute_framebuffer(Framebuffer * self) {
         // });
     }
 }
+
+PyObject * Framebuffer_meth_update(Framebuffer * self, PyObject * vargs, PyObject * kwargs) {
+    if (PyTuple_Size(vargs) || !kwargs) {
+        PyErr_Format(PyExc_TypeError, "invalid arguments");
+    }
+
+    Py_ssize_t pos = 0;
+    PyObject * key = NULL;
+    PyObject * value = NULL;
+
+    while (PyDict_Next(kwargs, &pos, &key, &value)) {
+        if (!PyUnicode_CompareWithASCIIString(key, "clear_values")) {
+            Py_buffer view = {};
+            if (PyObject_GetBuffer(value, &view, PyBUF_SIMPLE)) {
+                return NULL;
+            }
+            Py_ssize_t max_size = self->output_count * sizeof(VkClearValue);
+            if (view.len > max_size) {
+                PyBuffer_Release(&view);
+                return NULL;
+            }
+            PyBuffer_ToContiguous(self->clear_value_array, &view, view.len, 'C');
+            PyBuffer_Release(&view);
+            continue;
+        }
+        if (!PyUnicode_CompareWithASCIIString(key, "clear_depth")) {
+            self->clear_value_array[self->output_count].depthStencil.depth = (float)PyFloat_AsDouble(value);
+            if (PyErr_Occurred()) {
+                return NULL;
+            }
+            continue;
+        }
+    }
+
+    Py_RETURN_NONE;
+}
