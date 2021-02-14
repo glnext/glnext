@@ -1,0 +1,67 @@
+import glnext
+from glnext_compiler import glsl
+from objloader import Obj
+import numpy as np
+from matplotlib import pyplot as plt
+
+instance = glnext.instance()
+
+framebuffer = instance.framebuffer((512, 512), '1f', samples=1)
+
+vertex_size = 12
+mesh = Obj.open('examples/monkey.obj').pack('vx vy vz')
+vertex_count = len(mesh) // vertex_size
+
+pipeline = framebuffer.render(
+    vertex_shader=glsl('''
+        #version 450
+        #pragma shader_stage(vertex)
+
+        layout (binding = 0) uniform Buffer {
+            mat4 mvp;
+        };
+
+        layout (location = 0) in vec3 in_vert;
+
+        layout (location = 0) out float out_depth;
+
+        void main() {
+            vec4 vert = mvp * vec4(in_vert, 1.0);
+            gl_Position = vert;
+            out_depth = vert.z / vert.w;
+        }
+    '''),
+    fragment_shader=glsl('''
+        #version 450
+        #pragma shader_stage(fragment)
+
+        layout (location = 0) in float in_depth;
+
+        layout (location = 0) out float out_depth;
+
+        void main() {
+            out_depth = in_depth;
+        }
+    '''),
+    vertex_format='3f',
+    vertex_count=vertex_count,
+    bindings=[
+        {
+            'binding': 0,
+            'name': 'uniform_buffer',
+            'type': 'uniform_buffer',
+            'size': 64,
+        },
+    ],
+)
+
+pipeline.update(
+    uniform_buffer=glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0)),
+    vertex_buffer=mesh,
+)
+
+instance.run()
+data = framebuffer.output[0].read()
+array = np.ndarray((512, 512), 'f4', data)[::-1]
+plt.imshow(array, vmin=0.94, vmax=0.98)
+plt.show()
