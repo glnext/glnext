@@ -238,6 +238,7 @@ struct DescriptorBinding {
     VkDescriptorType descriptor_type;
     bool is_buffer;
     bool is_image;
+    bool is_new;
     struct {
         Buffer * buffer;
         VkDeviceSize size;

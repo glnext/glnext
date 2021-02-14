@@ -109,6 +109,7 @@ int parse_descriptor_binding(Instance * instance, DescriptorBinding * binding, P
                 return -1;
             }
 
+            binding->is_new = true;
             binding->buffer.size = PyLong_AsUnsignedLongLong(size);
 
             if (PyErr_Occurred()) {
@@ -560,7 +561,7 @@ int parse_descriptor_binding(Instance * instance, DescriptorBinding * binding, P
 }
 
 void create_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding, Memory * memory) {
-    if (binding->is_buffer) {
+    if (binding->is_buffer && binding->is_new) {
         binding->buffer.buffer = new_buffer({
             instance,
             memory,
@@ -572,7 +573,9 @@ void create_descriptor_binding_objects(Instance * instance, DescriptorBinding * 
 
 void bind_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding) {
     if (binding->is_buffer) {
-        bind_buffer(binding->buffer.buffer);
+        if (binding->is_new) {
+            bind_buffer(binding->buffer.buffer);
+        }
         binding->buffer.descriptor_buffer_info.buffer = binding->buffer.buffer->buffer;
     }
     if (binding->is_image) {

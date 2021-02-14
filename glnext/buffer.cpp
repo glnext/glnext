@@ -57,6 +57,10 @@ Buffer * Instance_meth_buffer(Instance * self, PyObject * vargs, PyObject * kwar
         buffer_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     }
 
+    if (!PyUnicode_CompareWithASCIIString(args.type, "uniform_buffer")) {
+        buffer_usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+
     if (!buffer_usage) {
         PyErr_Format(PyExc_ValueError, "type");
         return NULL;
