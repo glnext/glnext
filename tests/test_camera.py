@@ -3,7 +3,7 @@ import numpy as np
 
 
 def test_simple_camera():
-    camera = glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0))
+    camera = glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0), fov=75.0)
     assert type(camera) is bytes
     assert len(camera) == 64
 
