@@ -55,6 +55,11 @@ pipeline = framebuffer.render(
     ],
 )
 
+framebuffer.update(
+    clear_values=glnext.pack([1.0, 0.0, 0.0, 0.0]),
+    clear_depth=1.0,
+)
+
 pipeline.update(
     uniform_buffer=glnext.camera((4.0, 3.0, 2.0), (0.0, 0.0, 0.0)),
     vertex_buffer=mesh,
@@ -63,5 +68,5 @@ pipeline.update(
 instance.run()
 data = framebuffer.output[0].read()
 array = np.ndarray((512, 512), 'f4', data)[::-1]
-plt.imshow(array, vmin=0.94, vmax=0.98)
+plt.imshow(array, 'YlGn', vmin=0.94, vmax=0.98)
 plt.show()
