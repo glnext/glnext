@@ -27,7 +27,7 @@ PyObject * glnext_meth_camera(PyObject * self, PyObject * args, PyObject * kwarg
     vec3 eye;
     vec3 target;
     vec3 up = {0.0, 0.0, 1.0};
-    double fov = 75.0;
+    double fov = 60.0;
     double aspect = 1.0;
     double znear = 0.1;
     double zfar = 1000.0;
