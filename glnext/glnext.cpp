@@ -12,6 +12,7 @@
 #include "render_pipeline.cpp"
 #include "staging_buffer.cpp"
 #include "surface.cpp"
+#include "task.cpp"
 #include "tools.cpp"
 #include "utils.cpp"
 
@@ -25,6 +26,7 @@ PyMethodDef module_methods[] = {
 };
 
 PyMethodDef Instance_methods[] = {
+    {"task", (PyCFunction)Instance_meth_task, METH_VARARGS | METH_KEYWORDS, NULL},
     {"framebuffer", (PyCFunction)Instance_meth_framebuffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"compute", (PyCFunction)Instance_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
     {"buffer", (PyCFunction)Instance_meth_buffer, METH_VARARGS | METH_KEYWORDS, NULL},
@@ -32,6 +34,11 @@ PyMethodDef Instance_methods[] = {
     {"staging", (PyCFunction)Instance_meth_staging, METH_VARARGS | METH_KEYWORDS, NULL},
     {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
     {"run", (PyCFunction)Instance_meth_run, METH_NOARGS, NULL},
+    {},
+};
+
+PyMethodDef Task_methods[] = {
+    {"run", (PyCFunction)Task_meth_run, METH_NOARGS, NULL},
     {},
 };
 
@@ -102,6 +109,12 @@ PyType_Slot Instance_slots[] = {
     {},
 };
 
+PyType_Slot Task_slots[] = {
+    {Py_tp_methods, Task_methods},
+    {Py_tp_dealloc, default_dealloc},
+    {},
+};
+
 PyType_Slot Framebuffer_slots[] = {
     {Py_tp_methods, Framebuffer_methods},
     {Py_tp_members, Framebuffer_members},
@@ -149,6 +162,7 @@ PyType_Slot StagingBuffer_slots[] = {
 };
 
 PyType_Spec Instance_spec = {"glnext.Instance", sizeof(Instance), 0, Py_TPFLAGS_DEFAULT, Instance_slots};
+PyType_Spec Task_spec = {"glnext.Task", sizeof(Task), 0, Py_TPFLAGS_DEFAULT, Task_slots};
 PyType_Spec Framebuffer_spec = {"glnext.Framebuffer", sizeof(Framebuffer), 0, Py_TPFLAGS_DEFAULT, Framebuffer_slots};
 PyType_Spec RenderPipeline_spec = {"glnext.RenderPipeline", sizeof(RenderPipeline), 0, Py_TPFLAGS_DEFAULT, RenderPipeline_slots};
 PyType_Spec ComputePipeline_spec = {"glnext.ComputePipeline", sizeof(ComputePipeline), 0, Py_TPFLAGS_DEFAULT, ComputePipeline_slots};
@@ -161,6 +175,7 @@ int module_exec(PyObject * self) {
     ModuleState * state = (ModuleState *)PyModule_GetState(self);
 
     state->Instance_type = (PyTypeObject *)PyType_FromSpec(&Instance_spec);
+    state->Task_type = (PyTypeObject *)PyType_FromSpec(&Task_spec);
     state->Framebuffer_type = (PyTypeObject *)PyType_FromSpec(&Framebuffer_spec);
     state->RenderPipeline_type = (PyTypeObject *)PyType_FromSpec(&RenderPipeline_spec);
     state->ComputePipeline_type = (PyTypeObject *)PyType_FromSpec(&ComputePipeline_spec);
@@ -181,7 +196,7 @@ int module_exec(PyObject * self) {
     state->output_str = PyUnicode_FromString("output");
 
     PyModule_AddStringConstant(self, "default_surface", DEFAULT_SURFACE);
-    PyModule_AddObject(self, "execute_instance", PyLong_FromVoidPtr((void *)execute_instance));
+    PyModule_AddObject(self, "execute_task", PyLong_FromVoidPtr((void *)execute_task));
 
     return 0;
 }

@@ -112,6 +112,7 @@ struct Presenter {
 
 struct ModuleState {
     PyTypeObject * Instance_type;
+    PyTypeObject * Task_type;
     PyTypeObject * Framebuffer_type;
     PyTypeObject * RenderPipeline_type;
     PyTypeObject * ComputePipeline_type;
@@ -242,6 +243,19 @@ struct Instance {
     PFN_vkCreateMetalSurfaceEXT vkCreateMetalSurfaceEXT;
     PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR;
     PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
+};
+
+typedef void (* TaskCallback)(PyObject * obj);
+
+struct Task {
+    PyObject_HEAD
+    Instance * instance;
+    uint32_t staging_buffer_count;
+    StagingBuffer ** staging_buffer_array;
+    uint32_t task_count;
+    PyObject ** task_array;
+    TaskCallback * task_callback_array;
+    VkBool32 present;
 };
 
 struct DescriptorBinding {
@@ -447,6 +461,7 @@ void create_descriptor_binding_objects(Instance * instance, DescriptorBinding * 
 void bind_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding);
 
 void execute_instance(Instance * self);
+void execute_task(Task * self);
 void execute_framebuffer(Framebuffer * self);
 void execute_render_pipeline(RenderPipeline * self);
 void execute_compute_pipeline(ComputePipeline * self);
