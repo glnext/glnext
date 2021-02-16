@@ -15,10 +15,12 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
     StagingBuffer * res = PyObject_New(StagingBuffer, self->state->StagingBuffer_type);
 
     res->instance = self;
+    res->binding_count = (uint32_t)PyList_Size(args.bindings);
+    res->binding_array = (StagingBufferBinding *)PyMem_Malloc(sizeof(StagingBufferBinding) * res->binding_count);
 
     VkDeviceSize max_size = args.size;
 
-    for (uint32_t k = 0; k < PyList_Size(args.bindings); ++k) {
+    for (uint32_t k = 0; k < res->binding_count; ++k) {
         PyObject * obj = PyList_GetItem(args.bindings, k);
 
         if (!PyDict_CheckExact(obj)) {
@@ -39,6 +41,8 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
             PyErr_Format(PyExc_ValueError, "offset");
             return NULL;
         }
+
+        res->binding_array[k].offset = offset;
 
         PyObject * type = PyDict_GetItemString(obj, "type");
 
@@ -95,6 +99,9 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
             return NULL;
         }
 
+        res->binding_array[k].is_input = is_input;
+        res->binding_array[k].is_output = is_output;
+
         if (is_buffer) {
             Buffer * buffer = (Buffer *)PyDict_GetItemString(obj, "buffer");
 
@@ -103,21 +110,7 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
                 return NULL;
             }
 
-            if (buffer->staging_buffer) {
-                PyErr_Format(PyExc_ValueError, "buffer already marked for staging");
-                return NULL;
-            }
-
-            if (is_input) {
-                PyList_Append(self->staged_inputs, (PyObject *)buffer);
-            }
-
-            if (is_output) {
-                PyList_Append(self->staged_outputs, (PyObject *)buffer);
-            }
-
-            buffer->staging_buffer = res;
-            buffer->staging_offset = offset;
+            res->binding_array[k].buffer = buffer;
 
             if (max_size < offset + buffer->size + 8) {
                 max_size = offset + buffer->size + 8;
@@ -132,21 +125,7 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
                 return NULL;
             }
 
-            if (image->staging_buffer) {
-                PyErr_Format(PyExc_ValueError, "image already marked for staging");
-                return NULL;
-            }
-
-            if (is_input) {
-                PyList_Append(self->staged_inputs, (PyObject *)image);
-            }
-
-            if (is_output) {
-                PyList_Append(self->staged_outputs, (PyObject *)image);
-            }
-
-            image->staging_buffer = res;
-            image->staging_offset = offset;
+            res->binding_array[k].image = image;
 
             if (max_size < offset + image->size + 4) {
                 max_size = offset + image->size + 4;
@@ -161,19 +140,11 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
                 return NULL;
             }
 
-            if (pipeline->staging_buffer) {
-                PyErr_Format(PyExc_ValueError, "pipeline already marked for staging");
-                return NULL;
-            }
-
-            pipeline->staging_buffer = res;
-            pipeline->staging_offset = offset;
+            res->binding_array[k].render_pipeline = pipeline;
 
             if (max_size < offset + sizeof(RenderParameters)) {
                 max_size = offset + sizeof(RenderParameters);
             }
-
-            PyList_Append(self->staged_inputs, (PyObject *)pipeline);
         }
 
         if (is_compute_pipeline) {
@@ -184,19 +155,11 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
                 return NULL;
             }
 
-            if (pipeline->staging_buffer) {
-                PyErr_Format(PyExc_ValueError, "pipeline already marked for staging");
-                return NULL;
-            }
-
-            pipeline->staging_buffer = res;
-            pipeline->staging_offset = offset;
+            res->binding_array[k].compute_pipeline = pipeline;
 
             if (max_size < offset + sizeof(ComputeParameters)) {
                 max_size = offset + sizeof(ComputeParameters);
             }
-
-            PyList_Append(self->staged_inputs, (PyObject *)pipeline);
         }
     }
 
@@ -226,18 +189,18 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
     };
 
     self->vkAllocateMemory(self->device, &memory_allocate_info, NULL, &res->memory);
-    self->vkMapMemory(self->device, res->memory, 0, res->size, 0, &res->ptr);
+    self->vkMapMemory(self->device, res->memory, 0, res->size, 0, (void **)&res->ptr);
     self->vkBindBufferMemory(self->device, res->buffer, res->memory, 0);
 
     memset(res->ptr, 0, res->size);
 
-    res->mem = PyMemoryView_FromMemory((char *)res->ptr, res->size, PyBUF_WRITE);
-    Py_INCREF(res);
+    res->mem = PyMemoryView_FromMemory(res->ptr, res->size, PyBUF_WRITE);
+    PyList_Append(self->staging_list, (PyObject *)res);
     return res;
 }
 
 PyObject * StagingBuffer_meth_read(StagingBuffer * self) {
-    return PyBytes_FromStringAndSize((char *)self->ptr, self->size);
+    return PyBytes_FromStringAndSize(self->ptr, self->size);
 }
 
 PyObject * StagingBuffer_meth_write(StagingBuffer * self, PyObject * arg) {
@@ -251,180 +214,198 @@ PyObject * StagingBuffer_meth_write(StagingBuffer * self, PyObject * arg) {
     Py_RETURN_NONE;
 }
 
-void staging_input_buffer(Buffer * self) {
-    VkDeviceSize size = *(VkDeviceSize *)((char *)self->staging_buffer->ptr + self->staging_offset);
+void execute_staging_buffer_input(StagingBuffer * self) {
+    for (uint32_t k = 0; k < self->binding_count; ++k) {
+        if (!self->binding_array[k].is_input) {
+            continue;
+        }
 
-    if (!size) {
-        return;
-    }
+        if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Buffer_type) {
+            VkDeviceSize size = *(VkDeviceSize *)(self->ptr + self->binding_array[k].offset);
 
-    VkBufferCopy copy = {
-        self->staging_offset + 8,
-        0,
-        size,
-    };
+            if (!size) {
+                continue;
+            }
 
-    self->instance->vkCmdCopyBuffer(
-        self->instance->command_buffer,
-        self->staging_buffer->buffer,
-        self->buffer,
-        1,
-        &copy
-    );
-}
+            VkBufferCopy copy = {
+                self->binding_array[k].offset + 8,
+                0,
+                size,
+            };
 
-void staging_output_buffer(Buffer * self) {
-    VkDeviceSize size = *(VkDeviceSize *)((char *)self->staging_buffer->ptr + self->staging_offset);
+            self->instance->vkCmdCopyBuffer(
+                self->instance->command_buffer,
+                self->buffer,
+                self->binding_array[k].buffer->buffer,
+                1,
+                &copy
+            );
+        }
 
-    if (!size) {
-        return;
-    }
+        if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Image_type) {
+            VkBool32 enabled = *(VkBool32 *)(self->ptr + self->binding_array[k].offset);
+            Image * image = self->binding_array[k].image;
 
-    VkBufferCopy copy = {
-        0,
-        self->staging_offset + 8,
-        size,
-    };
+            if (!enabled) {
+                continue;
+            }
 
-    self->instance->vkCmdCopyBuffer(
-        self->instance->command_buffer,
-        self->buffer,
-        self->staging_buffer->buffer,
-        1,
-        &copy
-    );
-}
+            VkImageLayout image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-void staging_input_image(Image * self) {
-    VkBool32 enabled = *(VkBool32 *)((char *)self->staging_buffer->ptr + self->staging_offset);
+            if (image->mode == IMG_TEXTURE) {
+                image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
 
-    if (!enabled) {
-        return;
-    }
+            if (image->mode == IMG_STORAGE) {
+                image_layout = VK_IMAGE_LAYOUT_GENERAL;
+            }
 
-    VkImageLayout image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            VkImageMemoryBarrier image_barrier_transfer = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                image->image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, image->layers},
+            };
 
-    if (self->mode == IMG_TEXTURE) {
-        image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
+            self->instance->vkCmdPipelineBarrier(
+                self->instance->command_buffer,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                0,
+                0,
+                NULL,
+                0,
+                NULL,
+                1,
+                &image_barrier_transfer
+            );
 
-    if (self->mode == IMG_STORAGE) {
-        image_layout = VK_IMAGE_LAYOUT_GENERAL;
-    }
+            VkBufferImageCopy copy = {
+                self->binding_array[k].offset + 4,
+                image->extent.width,
+                image->extent.height,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, image->layers},
+                {0, 0, 0},
+                image->extent,
+            };
 
-    VkImageMemoryBarrier image_barrier_transfer = {
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        NULL,
-        0,
-        0,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        self->image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
-    };
+            self->instance->vkCmdCopyBufferToImage(
+                self->instance->command_buffer,
+                self->buffer,
+                image->image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1,
+                &copy
+            );
 
-    self->instance->vkCmdPipelineBarrier(
-        self->instance->command_buffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0,
-        0,
-        NULL,
-        0,
-        NULL,
-        1,
-        &image_barrier_transfer
-    );
+            if (image->samples == 1) {
+                VkImageMemoryBarrier image_barrier_general = {
+                    VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                    NULL,
+                    0,
+                    0,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    image_layout,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    image->image,
+                    {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, image->layers},
+                };
 
-    VkBufferImageCopy copy = {
-        self->staging_offset + 4,
-        self->extent.width,
-        self->extent.height,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, self->layers},
-        {0, 0, 0},
-        self->extent,
-    };
+                self->instance->vkCmdPipelineBarrier(
+                    self->instance->command_buffer,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0,
+                    NULL,
+                    0,
+                    NULL,
+                    1,
+                    &image_barrier_general
+                );
+            } else {
+                // build_mipmaps({
+                //     command_buffer,
+                //     image->extent.width,
+                //     image->extent.height,
+                //     image->levels,
+                //     image->layers,
+                //     1,
+                //     &image,
+                // });
+            }
+        }
 
-    self->instance->vkCmdCopyBufferToImage(
-        self->instance->command_buffer,
-        self->staging_buffer->buffer,
-        self->image,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1,
-        &copy
-    );
+        if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->RenderPipeline_type) {
+            self->binding_array[k].render_pipeline->parameters = *(RenderParameters *)(self->ptr + self->binding_array[k].offset);
+        }
 
-    if (self->samples == 1) {
-        VkImageMemoryBarrier image_barrier_general = {
-            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            NULL,
-            0,
-            0,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            image_layout,
-            VK_QUEUE_FAMILY_IGNORED,
-            VK_QUEUE_FAMILY_IGNORED,
-            self->image,
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
-        };
-
-        self->instance->vkCmdPipelineBarrier(
-            self->instance->command_buffer,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0,
-            NULL,
-            0,
-            NULL,
-            1,
-            &image_barrier_general
-        );
-    } else {
-        // build_mipmaps({
-        //     command_buffer,
-        //     image->extent.width,
-        //     image->extent.height,
-        //     image->levels,
-        //     image->layers,
-        //     1,
-        //     &image,
-        // });
+        if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->ComputePipeline_type) {
+            self->binding_array[k].compute_pipeline->parameters = *(ComputeParameters *)(self->ptr + self->binding_array[k].offset);
+        }
     }
 }
 
-void staging_output_image(Image * self) {
-    VkBool32 enabled = *(VkBool32 *)((char *)self->staging_buffer->ptr + self->staging_offset);
+void execute_staging_buffer_output(StagingBuffer * self) {
+    for (uint32_t k = 0; k < self->binding_count; ++k) {
+        if (!self->binding_array[k].is_output) {
+            continue;
+        }
 
-    if (!enabled) {
-        return;
+        if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Buffer_type) {
+            VkDeviceSize size = *(VkDeviceSize *)(self->ptr + self->binding_array[k].offset);
+
+            if (!size) {
+                continue;
+            }
+
+            VkBufferCopy copy = {
+                0,
+                self->binding_array[k].offset + 8,
+                size,
+            };
+
+            self->instance->vkCmdCopyBuffer(
+                self->instance->command_buffer,
+                self->binding_array[k].buffer->buffer,
+                self->buffer,
+                1,
+                &copy
+            );
+        }
+
+        if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Image_type) {
+            VkBool32 enabled = *(VkBool32 *)(self->ptr + self->binding_array[k].offset);
+            Image * image = self->binding_array[k].image;
+
+            if (!enabled) {
+                continue;
+            }
+
+            VkBufferImageCopy copy = {
+                self->binding_array[k].offset + 4,
+                image->extent.width,
+                image->extent.height,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, image->layers},
+                {0, 0, 0},
+                image->extent,
+            };
+
+            self->instance->vkCmdCopyImageToBuffer(
+                self->instance->command_buffer,
+                image->image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                self->buffer,
+                1,
+                &copy
+            );
+        }
     }
-
-    VkBufferImageCopy copy = {
-        self->staging_offset + 4,
-        self->extent.width,
-        self->extent.height,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, self->layers},
-        {0, 0, 0},
-        self->extent,
-    };
-
-    self->instance->vkCmdCopyImageToBuffer(
-        self->instance->command_buffer,
-        self->image,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        self->staging_buffer->buffer,
-        1,
-        &copy
-    );
-}
-
-void staging_render_parameters(RenderPipeline * self) {
-    self->parameters = *(RenderParameters *)((char *)self->staging_buffer->ptr + self->staging_offset);
-}
-
-void staging_compute_parameters(ComputePipeline * self) {
-    self->parameters = *(ComputeParameters *)((char *)self->staging_buffer->ptr + self->staging_offset);
 }

@@ -76,8 +76,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     RenderPipeline * res = PyObject_New(RenderPipeline, self->instance->state->RenderPipeline_type);
 
     res->instance = self->instance;
-    res->staging_buffer = NULL;
-    res->staging_offset = 0;
     res->members = PyDict_New();
 
     PyObject * vertex_format = PyUnicode_Split(args.vertex_format, NULL, -1);

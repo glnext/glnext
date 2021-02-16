@@ -80,7 +80,6 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
         args.layers,
         image_mode,
         format.format,
-        true,
     });
 
     allocate_memory(memory);

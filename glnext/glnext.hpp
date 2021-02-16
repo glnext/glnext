@@ -49,6 +49,12 @@ enum BufferMode {
     BUF_OUTPUT,
 };
 
+struct Image;
+struct Buffer;
+struct RenderPipeline;
+struct ComputePipeline;
+struct StagingBuffer;
+
 struct RenderParameters {
     VkBool32 enabled;
     uint32_t vertex_count;
@@ -75,6 +81,19 @@ struct HostBuffer {
     VkBuffer buffer;
     VkDeviceMemory memory;
     void * ptr;
+};
+
+struct StagingBufferBinding {
+    union {
+        PyObject * obj;
+        Buffer * buffer;
+        Image * image;
+        RenderPipeline * render_pipeline;
+        ComputePipeline * compute_pipeline;
+    };
+    VkDeviceSize offset;
+    VkBool32 is_input;
+    VkBool32 is_output;
 };
 
 struct Presenter {
@@ -135,13 +154,11 @@ struct Instance {
     Presenter presenter;
 
     PyObject * task_list;
+    PyObject * staging_list;
     PyObject * memory_list;
     PyObject * buffer_list;
     PyObject * image_list;
     PyObject * log_list;
-
-    PyObject * staged_inputs;
-    PyObject * staged_outputs;
 
     ModuleState * state;
 
@@ -227,10 +244,6 @@ struct Instance {
     PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
 };
 
-struct Image;
-struct Buffer;
-struct StagingBuffer;
-
 struct DescriptorBinding {
     PyObject * type;
     PyObject * name;
@@ -312,8 +325,6 @@ struct RenderPipeline {
     VkBuffer * attribute_buffer_array;
     VkDeviceSize * attribute_offset_array;
     VkPipeline pipeline;
-    StagingBuffer * staging_buffer;
-    VkDeviceSize staging_offset;
     PyObject * members;
 };
 
@@ -332,8 +343,6 @@ struct ComputePipeline {
     VkDescriptorSet descriptor_set;
     VkShaderModule compute_shader_module;
     VkPipeline pipeline;
-    StagingBuffer * staging_buffer;
-    VkDeviceSize staging_offset;
     PyObject * members;
 };
 
@@ -355,8 +364,6 @@ struct Buffer {
     VkDeviceSize size;
     VkBufferUsageFlags usage;
     VkBuffer buffer;
-    StagingBuffer * staging_buffer;
-    VkDeviceSize staging_offset;
 };
 
 struct Image {
@@ -373,9 +380,6 @@ struct Image {
     ImageMode mode;
     VkFormat format;
     VkImage image;
-    StagingBuffer * staging_buffer;
-    VkDeviceSize staging_offset;
-    VkBool32 user_created;
 };
 
 struct StagingBuffer {
@@ -384,7 +388,9 @@ struct StagingBuffer {
     VkDeviceSize size;
     VkBuffer buffer;
     VkDeviceMemory memory;
-    void * ptr;
+    char * ptr;
+    uint32_t binding_count;
+    StagingBufferBinding * binding_array;
     PyObject * mem;
 };
 
@@ -407,7 +413,6 @@ struct ImageCreateInfo {
     uint32_t layers;
     ImageMode mode;
     VkFormat format;
-    VkBool32 user_created;
 };
 
 struct BuildMipmapsInfo {
@@ -432,12 +437,8 @@ void load_library_methods(Instance * instance);
 void load_instance_methods(Instance * instance);
 void load_device_methods(Instance * instance);
 
-void staging_input_buffer(Buffer * self);
-void staging_output_buffer(Buffer * self);
-void staging_input_image(Image * self);
-void staging_output_image(Image * self);
-void staging_render_parameters(RenderPipeline * self);
-void staging_compute_parameters(ComputePipeline * self);
+void execute_staging_buffer_input(StagingBuffer * self);
+void execute_staging_buffer_output(StagingBuffer * self);
 
 void install_debug_messenger(Instance * instance);
 

@@ -73,13 +73,11 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->presenter = {};
 
     res->task_list = PyList_New(0);
+    res->staging_list = PyList_New(0);
     res->memory_list = PyList_New(0);
     res->buffer_list = PyList_New(0);
     res->image_list = PyList_New(0);
     res->log_list = PyList_New(0);
-
-    res->staged_inputs = PyList_New(0);
-    res->staged_outputs = PyList_New(0);
 
     VkApplicationInfo application_info = {
         VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -265,20 +263,9 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 void execute_instance(Instance * self) {
     begin_commands(self);
 
-    for (uint32_t i = 0; i < PyList_GET_SIZE(self->staged_inputs); ++i) {
-        PyObject * item = PyList_GET_ITEM(self->staged_inputs, i);
-        if (Py_TYPE(item) == self->state->Buffer_type) {
-            staging_input_buffer((Buffer *)item);
-        }
-        if (Py_TYPE(item) == self->state->Image_type) {
-            staging_input_image((Image *)item);
-        }
-        if (Py_TYPE(item) == self->state->RenderPipeline_type) {
-            staging_render_parameters((RenderPipeline *)item);
-        }
-        if (Py_TYPE(item) == self->state->ComputePipeline_type) {
-            staging_compute_parameters((ComputePipeline *)item);
-        }
+    for (uint32_t i = 0; i < PyList_GET_SIZE(self->staging_list); ++i) {
+        StagingBuffer * staging = (StagingBuffer *)PyList_GET_ITEM(self->staging_list, i);
+        execute_staging_buffer_input(staging);
     }
 
     for (uint32_t i = 0; i < PyList_GET_SIZE(self->task_list); ++i) {
@@ -291,14 +278,9 @@ void execute_instance(Instance * self) {
         }
     }
 
-    for (uint32_t i = 0; i < PyList_GET_SIZE(self->staged_outputs); ++i) {
-        PyObject * item = PyList_GET_ITEM(self->staged_outputs, i);
-        if (Py_TYPE(item) == self->state->Buffer_type) {
-            staging_output_buffer((Buffer *)item);
-        }
-        if (Py_TYPE(item) == self->state->Image_type) {
-            staging_output_image((Image *)item);
-        }
+    for (uint32_t i = 0; i < PyList_GET_SIZE(self->staging_list); ++i) {
+        StagingBuffer * staging = (StagingBuffer *)PyList_GET_ITEM(self->staging_list, i);
+        execute_staging_buffer_output(staging);
     }
 
     if (self->presenter.surface_count) {

@@ -128,7 +128,6 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
             args.layers,
             image_mode,
             format.format,
-            false,
         });
     }
 
@@ -145,7 +144,6 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
             args.layers,
             IMG_PROTECTED,
             self->depth_format,
-            false,
         });
     }
 
@@ -164,7 +162,6 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
                 args.layers,
                 IMG_PROTECTED,
                 format.format,
-                false,
             });
         }
     }

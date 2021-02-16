@@ -72,8 +72,6 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     ComputePipeline * res = PyObject_New(ComputePipeline, self->state->ComputePipeline_type);
 
     res->instance = self;
-    res->staging_buffer = NULL;
-    res->staging_offset = 0;
     res->members = PyDict_New();
 
     res->parameters = {
