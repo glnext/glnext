@@ -88,6 +88,10 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
         image_usage |= VK_IMAGE_USAGE_STORAGE_BIT;
     }
 
+    if (args.samples > 1) {
+        image_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+
     Framebuffer * res = PyObject_New(Framebuffer, self->state->Framebuffer_type);
 
     res->instance = self;
@@ -374,15 +378,43 @@ void execute_framebuffer(Framebuffer * self) {
     }
 
     if (self->levels > 1) {
-        // build_mipmaps({
-        //     self->instance->command_buffer,
-        //     self->width,
-        //     self->height,
-        //     self->levels,
-        //     self->layers,
-        //     self->output_count,
-        //     self->image_array,
-        // });
+        for (uint32_t i = 0; i < self->output_count; ++i) {
+            VkImageMemoryBarrier image_barrier = {
+                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                NULL,
+                0,
+                0,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_QUEUE_FAMILY_IGNORED,
+                VK_QUEUE_FAMILY_IGNORED,
+                self->image_array[i]->image,
+                {VK_IMAGE_ASPECT_COLOR_BIT, 1, self->levels - 1, 0, self->layers},
+            };
+
+            self->instance->vkCmdPipelineBarrier(
+                self->instance->command_buffer,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                0,
+                0,
+                NULL,
+                0,
+                NULL,
+                1,
+                &image_barrier
+            );
+        }
+
+        build_mipmaps({
+            self->instance,
+            self->width,
+            self->height,
+            self->levels,
+            self->layers,
+            self->output_count,
+            self->image_array,
+        });
     }
 }
 
