@@ -42,6 +42,7 @@ glnext = Extension(
         'glnext/render_pipeline.cpp',
         'glnext/staging_buffer.cpp',
         'glnext/surface.cpp',
+        'glnext/task.cpp',
         'glnext/tools.cpp',
         'glnext/utils.cpp',
     ],
