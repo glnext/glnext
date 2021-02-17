@@ -1,0 +1,20 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: sdist
+        run: docker run --rm -v `pwd`:/build -w /build python:3.8-slim python3 setup.py sdist
+
+      - name: publish
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
