@@ -33,13 +33,13 @@ def test_staging_input_buffer(instance):
             'buffer': buffer,
         }
     ])
-    assert len(staging.mem) == 64 + 8
-    staging.mem[:8] = glnext.pack([64, 0])
-    staging.mem[8:] = data
+    assert len(staging.mem) == 64 + 4
+    staging.mem[:4] = glnext.pack([64])
+    staging.mem[4:] = data
     instance.run()
     assert buffer.read() == data
-    staging.mem[:8] = glnext.pack([0, 0])
-    staging.mem[8:] = os.urandom(64)
+    staging.mem[:4] = glnext.pack([0])
+    staging.mem[4:] = os.urandom(64)
     instance.run()
     assert buffer.read() == data
 
@@ -56,11 +56,11 @@ def test_staging_input_size(instance):
             'buffer': buffer,
         }
     ])
-    staging.mem[:8] = glnext.pack([64, 0])
-    staging.mem[8:] = data1 + data2
+    staging.mem[:4] = glnext.pack([64])
+    staging.mem[4:] = data1 + data2
     instance.run()
     assert buffer.read() == data1 + data2
-    staging.mem[:8] = glnext.pack([32, 0])
-    staging.mem[8:] = data3 + os.urandom(32)
+    staging.mem[:4] = glnext.pack([32])
+    staging.mem[4:] = data3 + os.urandom(32)
     instance.run()
     assert buffer.read() == data3 + data2

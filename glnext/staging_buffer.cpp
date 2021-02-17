@@ -112,8 +112,8 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
 
             res->binding_array[k].buffer = buffer;
 
-            if (max_size < offset + buffer->size + 8) {
-                max_size = offset + buffer->size + 8;
+            if (max_size < offset + buffer->size + 4) {
+                max_size = offset + buffer->size + 4;
             }
         }
 
@@ -221,14 +221,14 @@ void execute_staging_buffer_input(StagingBuffer * self) {
         }
 
         if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Buffer_type) {
-            VkDeviceSize size = *(VkDeviceSize *)(self->ptr + self->binding_array[k].offset);
+            uint32_t size = *(uint32_t *)(self->ptr + self->binding_array[k].offset);
 
             if (!size) {
                 continue;
             }
 
             VkBufferCopy copy = {
-                self->binding_array[k].offset + 8,
+                self->binding_array[k].offset + 4,
                 0,
                 size,
             };
@@ -360,7 +360,7 @@ void execute_staging_buffer_output(StagingBuffer * self) {
         }
 
         if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Buffer_type) {
-            VkDeviceSize size = *(VkDeviceSize *)(self->ptr + self->binding_array[k].offset);
+            uint32_t size = *(uint32_t *)(self->ptr + self->binding_array[k].offset);
 
             if (!size) {
                 continue;
@@ -368,7 +368,7 @@ void execute_staging_buffer_output(StagingBuffer * self) {
 
             VkBufferCopy copy = {
                 0,
-                self->binding_array[k].offset + 8,
+                self->binding_array[k].offset + 4,
                 size,
             };
 
