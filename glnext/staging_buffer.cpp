@@ -304,7 +304,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
                 &copy
             );
 
-            if (image->samples == 1) {
+            if (image->levels == 1) {
                 VkImageMemoryBarrier image_barrier_general = {
                     VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
                     NULL,
@@ -331,15 +331,55 @@ void execute_staging_buffer_input(StagingBuffer * self) {
                     &image_barrier_general
                 );
             } else {
-                // build_mipmaps({
-                //     command_buffer,
-                //     image->extent.width,
-                //     image->extent.height,
-                //     image->levels,
-                //     image->layers,
-                //     1,
-                //     &image,
-                // });
+                VkImageMemoryBarrier image_barriers[] = {
+                    {
+                        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                        NULL,
+                        0,
+                        0,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_QUEUE_FAMILY_IGNORED,
+                        VK_QUEUE_FAMILY_IGNORED,
+                        image->image,
+                        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, image->layers},
+                    },
+                    {
+                        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                        NULL,
+                        0,
+                        0,
+                        VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_QUEUE_FAMILY_IGNORED,
+                        VK_QUEUE_FAMILY_IGNORED,
+                        image->image,
+                        {VK_IMAGE_ASPECT_COLOR_BIT, 1, image->levels - 1, 0, image->layers},
+                    },
+                };
+
+                self->instance->vkCmdPipelineBarrier(
+                    self->instance->command_buffer,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    0,
+                    0,
+                    NULL,
+                    0,
+                    NULL,
+                    2,
+                    image_barriers
+                );
+
+                build_mipmaps({
+                    self->instance,
+                    image->extent.width,
+                    image->extent.height,
+                    image->levels,
+                    image->layers,
+                    1,
+                    &image,
+                });
             }
         }
 
