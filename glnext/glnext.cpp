@@ -1,5 +1,6 @@
 #include "glnext.hpp"
 
+#include "batch.cpp"
 #include "binding.cpp"
 #include "buffer.cpp"
 #include "compute_pipeline.cpp"
@@ -12,7 +13,6 @@
 #include "render_pipeline.cpp"
 #include "staging_buffer.cpp"
 #include "surface.cpp"
-#include "task.cpp"
 #include "tools.cpp"
 #include "utils.cpp"
 
