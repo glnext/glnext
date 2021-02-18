@@ -112,8 +112,8 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
 
             res->binding_array[k].buffer = buffer;
 
-            if (max_size < offset + buffer->size + 4) {
-                max_size = offset + buffer->size + 4;
+            if (max_size < offset + buffer->size) {
+                max_size = offset + buffer->size;
             }
         }
 
@@ -127,8 +127,8 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
 
             res->binding_array[k].image = image;
 
-            if (max_size < offset + image->size + 4) {
-                max_size = offset + image->size + 4;
+            if (max_size < offset + image->size) {
+                max_size = offset + image->size;
             }
         }
 
@@ -221,16 +221,10 @@ void execute_staging_buffer_input(StagingBuffer * self) {
         }
 
         if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Buffer_type) {
-            uint32_t size = *(uint32_t *)(self->ptr + self->binding_array[k].offset);
-
-            if (!size) {
-                continue;
-            }
-
             VkBufferCopy copy = {
-                self->binding_array[k].offset + 4,
+                self->binding_array[k].offset,
                 0,
-                size,
+                self->binding_array[k].buffer->size,
             };
 
             self->instance->vkCmdCopyBuffer(
@@ -243,12 +237,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
         }
 
         if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Image_type) {
-            VkBool32 enabled = *(VkBool32 *)(self->ptr + self->binding_array[k].offset);
             Image * image = self->binding_array[k].image;
-
-            if (!enabled) {
-                continue;
-            }
 
             VkImageLayout image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
@@ -287,7 +276,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
             );
 
             VkBufferImageCopy copy = {
-                self->binding_array[k].offset + 4,
+                self->binding_array[k].offset,
                 image->extent.width,
                 image->extent.height,
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, image->layers},
@@ -400,16 +389,10 @@ void execute_staging_buffer_output(StagingBuffer * self) {
         }
 
         if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Buffer_type) {
-            uint32_t size = *(uint32_t *)(self->ptr + self->binding_array[k].offset);
-
-            if (!size) {
-                continue;
-            }
-
             VkBufferCopy copy = {
                 0,
-                self->binding_array[k].offset + 4,
-                size,
+                self->binding_array[k].offset,
+                self->binding_array[k].buffer->size,
             };
 
             self->instance->vkCmdCopyBuffer(
@@ -422,15 +405,10 @@ void execute_staging_buffer_output(StagingBuffer * self) {
         }
 
         if (Py_TYPE(self->binding_array[k].obj) == self->instance->state->Image_type) {
-            VkBool32 enabled = *(VkBool32 *)(self->ptr + self->binding_array[k].offset);
             Image * image = self->binding_array[k].image;
 
-            if (!enabled) {
-                continue;
-            }
-
             VkBufferImageCopy copy = {
-                self->binding_array[k].offset + 4,
+                self->binding_array[k].offset,
                 image->extent.width,
                 image->extent.height,
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, image->layers},
