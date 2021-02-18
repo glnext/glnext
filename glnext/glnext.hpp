@@ -435,6 +435,7 @@ struct ImageCreateInfo {
 
 struct BuildMipmapsInfo {
     Instance * instance;
+    VkCommandBuffer command_buffer;
     uint32_t width;
     uint32_t height;
     uint32_t levels;
@@ -455,9 +456,6 @@ void load_library_methods(Instance * instance);
 void load_instance_methods(Instance * instance);
 void load_device_methods(Instance * instance);
 
-void execute_staging_buffer_input(StagingBuffer * self);
-void execute_staging_buffer_output(StagingBuffer * self);
-
 void install_debug_messenger(Instance * instance);
 
 int parse_descriptor_binding(Instance * instance, DescriptorBinding * binding, PyObject * obj);
@@ -465,9 +463,11 @@ void create_descriptor_binding_objects(Instance * instance, DescriptorBinding * 
 void bind_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding);
 
 void execute_instance(Instance * self);
-void execute_framebuffer(Framebuffer * self);
-void execute_render_pipeline(RenderPipeline * self);
-void execute_compute_pipeline(ComputePipeline * self);
+void execute_framebuffer(Framebuffer * self, VkCommandBuffer command_buffer);
+void execute_render_pipeline(RenderPipeline * self, VkCommandBuffer command_buffer);
+void execute_compute_pipeline(ComputePipeline * self, VkCommandBuffer command_buffer);
+void execute_staging_buffer_input(StagingBuffer * self, VkCommandBuffer command_buffer);
+void execute_staging_buffer_output(StagingBuffer * self, VkCommandBuffer command_buffer);
 
 VkCommandBuffer begin_commands(Instance * instance);
 void end_commands(Instance * instance);

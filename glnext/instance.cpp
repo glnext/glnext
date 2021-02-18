@@ -265,22 +265,22 @@ void execute_instance(Instance * self) {
 
     for (uint32_t i = 0; i < PyList_GET_SIZE(self->staging_list); ++i) {
         StagingBuffer * staging = (StagingBuffer *)PyList_GET_ITEM(self->staging_list, i);
-        execute_staging_buffer_input(staging);
+        execute_staging_buffer_input(staging, self->command_buffer);
     }
 
     for (uint32_t i = 0; i < PyList_GET_SIZE(self->task_list); ++i) {
         PyObject * task = PyList_GET_ITEM(self->task_list, i);
         if (Py_TYPE(task) == self->state->Framebuffer_type) {
-            execute_framebuffer((Framebuffer *)task);
+            execute_framebuffer((Framebuffer *)task, self->command_buffer);
         }
         if (Py_TYPE(task) == self->state->ComputePipeline_type) {
-            execute_compute_pipeline((ComputePipeline *)task);
+            execute_compute_pipeline((ComputePipeline *)task, self->command_buffer);
         }
     }
 
     for (uint32_t i = 0; i < PyList_GET_SIZE(self->staging_list); ++i) {
         StagingBuffer * staging = (StagingBuffer *)PyList_GET_ITEM(self->staging_list, i);
-        execute_staging_buffer_output(staging);
+        execute_staging_buffer_output(staging, self->command_buffer);
     }
 
     if (self->presenter.surface_count) {

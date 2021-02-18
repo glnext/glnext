@@ -266,15 +266,15 @@ PyObject * ComputePipeline_meth_update(ComputePipeline * self, PyObject * vargs,
     Py_RETURN_NONE;
 }
 
-void execute_compute_pipeline(ComputePipeline * self) {
+void execute_compute_pipeline(ComputePipeline * self, VkCommandBuffer command_buffer) {
     if (!self->parameters.enabled) {
         return;
     }
 
-    self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, self->pipeline);
+    self->instance->vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, self->pipeline);
 
     self->instance->vkCmdBindDescriptorSets(
-        self->instance->command_buffer,
+        command_buffer,
         VK_PIPELINE_BIND_POINT_COMPUTE,
         self->pipeline_layout,
         0,
@@ -284,7 +284,7 @@ void execute_compute_pipeline(ComputePipeline * self) {
         NULL
     );
 
-    self->instance->vkCmdDispatch(self->instance->command_buffer, self->parameters.x, self->parameters.x, self->parameters.z);
+    self->instance->vkCmdDispatch(command_buffer, self->parameters.x, self->parameters.x, self->parameters.z);
 }
 
 PyObject * ComputePipeline_subscript(ComputePipeline * self, PyObject * key) {

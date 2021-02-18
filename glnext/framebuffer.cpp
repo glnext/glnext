@@ -318,7 +318,7 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
     return res;
 }
 
-void execute_framebuffer(Framebuffer * self) {
+void execute_framebuffer(Framebuffer * self, VkCommandBuffer command_buffer) {
     for (uint32_t layer = 0; layer < self->layers; ++layer) {
         VkRenderPassBeginInfo render_pass_begin_info = {
             VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -330,19 +330,19 @@ void execute_framebuffer(Framebuffer * self) {
             self->clear_value_array,
         };
 
-        self->instance->vkCmdBeginRenderPass(self->instance->command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+        self->instance->vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
         VkViewport viewport = {0.0f, 0.0f, (float)self->width, (float)self->height, 0.0f, 1.0f};
-        self->instance->vkCmdSetViewport(self->instance->command_buffer, 0, 1, &viewport);
+        self->instance->vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
         VkRect2D scissor = {{0, 0}, {self->width, self->height}};
-        self->instance->vkCmdSetScissor(self->instance->command_buffer, 0, 1, &scissor);
+        self->instance->vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
         for (uint32_t i = 0; i < PyList_GET_SIZE(self->render_pipeline_list); ++i) {
             RenderPipeline * pipeline = (RenderPipeline *)PyList_GET_ITEM(self->render_pipeline_list, i);
 
             self->instance->vkCmdPushConstants(
-                self->instance->command_buffer,
+                command_buffer,
                 pipeline->pipeline_layout,
                 VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                 0,
@@ -350,19 +350,19 @@ void execute_framebuffer(Framebuffer * self) {
                 &layer
             );
 
-            execute_render_pipeline(pipeline);
+            execute_render_pipeline(pipeline, command_buffer);
         }
 
-        self->instance->vkCmdEndRenderPass(self->instance->command_buffer);
+        self->instance->vkCmdEndRenderPass(command_buffer);
 
         for (uint32_t i = 0; i < PyList_GET_SIZE(self->compute_pipeline_list); ++i) {
             ComputePipeline * pipeline = (ComputePipeline *)PyList_GET_ITEM(self->compute_pipeline_list, i);
-            execute_compute_pipeline(pipeline);
+            execute_compute_pipeline(pipeline, command_buffer);
         }
 
         if (self->image_barrier_count) {
             self->instance->vkCmdPipelineBarrier(
-                self->instance->command_buffer,
+                command_buffer,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 0,
@@ -393,7 +393,7 @@ void execute_framebuffer(Framebuffer * self) {
             };
 
             self->instance->vkCmdPipelineBarrier(
-                self->instance->command_buffer,
+                command_buffer,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 0,
@@ -408,6 +408,7 @@ void execute_framebuffer(Framebuffer * self) {
 
         build_mipmaps({
             self->instance,
+            command_buffer,
             self->width,
             self->height,
             self->levels,

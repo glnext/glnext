@@ -1,6 +1,6 @@
 #include "glnext.hpp"
 
-Batch * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs) {
+Batch * Instance_meth_batch(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "tasks",
         "staging_buffers",
@@ -14,10 +14,12 @@ Batch * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs)
         VkBool32 present = false;
     } args;
 
+    args.staging_buffers = self->state->empty_list;
+
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "O!O!|p",
+        "O!|O!p",
         keywords,
         &PyList_Type,
         &args.tasks,
@@ -29,9 +31,6 @@ Batch * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs)
     if (!args_ok) {
         return NULL;
     }
-
-    uint32_t task_count = (uint32_t)PyList_Size(args.tasks);
-    uint32_t staging_buffer_count = (uint32_t)PyList_Size(args.staging_buffers);
 
     Batch * res = PyObject_New(Batch, self->state->Batch_type);
 
@@ -69,24 +68,24 @@ Batch * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs)
 
     res->instance->vkBeginCommandBuffer(res->command_buffer, &command_buffer_begin_info);
 
-    for (uint32_t i = 0; i < staging_buffer_count; ++i) {
+    for (uint32_t i = 0; i < PyList_Size(args.staging_buffers); ++i) {
         PyObject * obj = PyList_GetItem(args.staging_buffers, i);
-        execute_staging_buffer_input((StagingBuffer *)obj);
+        execute_staging_buffer_input((StagingBuffer *)obj, res->command_buffer);
     }
 
-    for (uint32_t i = 0; i < task_count; ++i) {
+    for (uint32_t i = 0; i < PyList_Size(args.tasks); ++i) {
         PyObject * obj = PyList_GetItem(args.tasks, i);
         if (Py_TYPE(obj) == self->state->Framebuffer_type) {
-            execute_framebuffer((Framebuffer *)obj);
+            execute_framebuffer((Framebuffer *)obj, res->command_buffer);
         }
         if (Py_TYPE(obj) == self->state->ComputePipeline_type) {
-            execute_compute_pipeline((ComputePipeline *)obj);
+            execute_compute_pipeline((ComputePipeline *)obj, res->command_buffer);
         }
     }
 
-    for (uint32_t i = 0; i < staging_buffer_count; ++i) {
+    for (uint32_t i = 0; i < PyList_Size(args.staging_buffers); ++i) {
         PyObject * obj = PyList_GetItem(args.staging_buffers, i);
-        execute_staging_buffer_output((StagingBuffer *)obj);
+        execute_staging_buffer_output((StagingBuffer *)obj, res->command_buffer);
     }
 
     self->vkEndCommandBuffer(res->command_buffer);

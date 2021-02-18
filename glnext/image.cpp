@@ -281,6 +281,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
 
         build_mipmaps({
             self->instance,
+            command_buffer,
             self->extent.width,
             self->extent.height,
             self->levels,

@@ -172,7 +172,7 @@ PyObject * StagingBuffer_meth_write(StagingBuffer * self, PyObject * arg) {
     Py_RETURN_NONE;
 }
 
-void execute_staging_buffer_input(StagingBuffer * self) {
+void execute_staging_buffer_input(StagingBuffer * self, VkCommandBuffer command_buffer) {
     for (uint32_t k = 0; k < self->binding_count; ++k) {
         if (!self->binding_array[k].is_input) {
             continue;
@@ -186,7 +186,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
             };
 
             self->instance->vkCmdCopyBuffer(
-                self->instance->command_buffer,
+                command_buffer,
                 self->buffer,
                 self->binding_array[k].buffer->buffer,
                 1,
@@ -221,7 +221,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
             };
 
             self->instance->vkCmdPipelineBarrier(
-                self->instance->command_buffer,
+                command_buffer,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 0,
@@ -243,7 +243,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
             };
 
             self->instance->vkCmdCopyBufferToImage(
-                self->instance->command_buffer,
+                command_buffer,
                 self->buffer,
                 image->image,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -266,7 +266,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
                 };
 
                 self->instance->vkCmdPipelineBarrier(
-                    self->instance->command_buffer,
+                    command_buffer,
                     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                     0,
@@ -306,7 +306,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
                 };
 
                 self->instance->vkCmdPipelineBarrier(
-                    self->instance->command_buffer,
+                    command_buffer,
                     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                     0,
@@ -320,6 +320,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
 
                 build_mipmaps({
                     self->instance,
+                    command_buffer,
                     image->extent.width,
                     image->extent.height,
                     image->levels,
@@ -340,7 +341,7 @@ void execute_staging_buffer_input(StagingBuffer * self) {
     }
 }
 
-void execute_staging_buffer_output(StagingBuffer * self) {
+void execute_staging_buffer_output(StagingBuffer * self, VkCommandBuffer command_buffer) {
     for (uint32_t k = 0; k < self->binding_count; ++k) {
         if (!self->binding_array[k].is_output) {
             continue;
@@ -354,7 +355,7 @@ void execute_staging_buffer_output(StagingBuffer * self) {
             };
 
             self->instance->vkCmdCopyBuffer(
-                self->instance->command_buffer,
+                command_buffer,
                 self->binding_array[k].buffer->buffer,
                 self->buffer,
                 1,
@@ -375,7 +376,7 @@ void execute_staging_buffer_output(StagingBuffer * self) {
             };
 
             self->instance->vkCmdCopyImageToBuffer(
-                self->instance->command_buffer,
+                command_buffer,
                 image->image,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 self->buffer,

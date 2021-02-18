@@ -268,7 +268,7 @@ void build_mipmaps(BuildMipmapsInfo args) {
 
         for (uint32_t i = 0; i < args.image_count; ++i) {
             args.instance->vkCmdBlitImage(
-                args.instance->command_buffer,
+                args.command_buffer,
                 args.image_array[i]->image,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 args.image_array[i]->image,
@@ -298,7 +298,7 @@ void build_mipmaps(BuildMipmapsInfo args) {
         }
 
         args.instance->vkCmdPipelineBarrier(
-            args.instance->command_buffer,
+            args.command_buffer,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
@@ -331,7 +331,7 @@ void build_mipmaps(BuildMipmapsInfo args) {
         }
 
         args.instance->vkCmdPipelineBarrier(
-            args.instance->command_buffer,
+            args.command_buffer,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,

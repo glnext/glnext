@@ -566,16 +566,16 @@ PyObject * RenderPipeline_meth_update(RenderPipeline * self, PyObject * vargs, P
     Py_RETURN_NONE;
 }
 
-void execute_render_pipeline(RenderPipeline * self) {
+void execute_render_pipeline(RenderPipeline * self, VkCommandBuffer command_buffer) {
     if (!self->parameters.enabled) {
         return;
     }
 
-    self->instance->vkCmdBindPipeline(self->instance->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->pipeline);
+    self->instance->vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->pipeline);
 
     if (self->attribute_count) {
         self->instance->vkCmdBindVertexBuffers(
-            self->instance->command_buffer,
+            command_buffer,
             0,
             self->attribute_count,
             self->attribute_buffer_array,
@@ -585,7 +585,7 @@ void execute_render_pipeline(RenderPipeline * self) {
 
     if (self->descriptor_set) {
         self->instance->vkCmdBindDescriptorSets(
-            self->instance->command_buffer,
+            command_buffer,
             VK_PIPELINE_BIND_POINT_GRAPHICS,
             self->pipeline_layout,
             0,
@@ -598,7 +598,7 @@ void execute_render_pipeline(RenderPipeline * self) {
 
     if (self->index_buffer) {
         self->instance->vkCmdBindIndexBuffer(
-            self->instance->command_buffer,
+            command_buffer,
             self->index_buffer->buffer,
             0,
             VK_INDEX_TYPE_UINT32
@@ -606,13 +606,13 @@ void execute_render_pipeline(RenderPipeline * self) {
     }
 
     if (self->indirect_buffer && self->index_buffer) {
-        self->instance->vkCmdDrawIndexedIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 20);
+        self->instance->vkCmdDrawIndexedIndirect(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 20);
     } else if (self->indirect_buffer) {
-        self->instance->vkCmdDrawIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 16);
+        self->instance->vkCmdDrawIndirect(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 16);
     } else if (self->index_buffer) {
-        self->instance->vkCmdDrawIndexed(self->instance->command_buffer, self->parameters.index_count, self->parameters.instance_count, 0, 0, 0);
+        self->instance->vkCmdDrawIndexed(command_buffer, self->parameters.index_count, self->parameters.instance_count, 0, 0, 0);
     } else {
-        self->instance->vkCmdDraw(self->instance->command_buffer, self->parameters.vertex_count, self->parameters.instance_count, 0, 0);
+        self->instance->vkCmdDraw(command_buffer, self->parameters.vertex_count, self->parameters.instance_count, 0, 0);
     }
 }
 

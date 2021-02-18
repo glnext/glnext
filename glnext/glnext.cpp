@@ -26,7 +26,7 @@ PyMethodDef module_methods[] = {
 };
 
 PyMethodDef Instance_methods[] = {
-    {"task", (PyCFunction)Instance_meth_task, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"batch", (PyCFunction)Instance_meth_batch, METH_VARARGS | METH_KEYWORDS, NULL},
     {"framebuffer", (PyCFunction)Instance_meth_framebuffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"compute", (PyCFunction)Instance_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
     {"buffer", (PyCFunction)Instance_meth_buffer, METH_VARARGS | METH_KEYWORDS, NULL},
