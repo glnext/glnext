@@ -56,6 +56,11 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
         return NULL;
     }
 
+    if (!self->presenter.supported) {
+        PyErr_Format(PyExc_ValueError, "surface not enabled");
+        return NULL;
+    }
+
     VkSurfaceKHR surface = NULL;
 
     #ifdef BUILD_WINDOWS
