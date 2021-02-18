@@ -58,7 +58,7 @@ with open('README.md') as readme:
 
 setup(
     name='glnext',
-    version='0.5.0',
+    version='0.6.0',
     ext_modules=[glnext],
     long_description=long_description,
     long_description_content_type='text/markdown',
