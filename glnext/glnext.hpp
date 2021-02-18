@@ -256,6 +256,7 @@ struct Batch {
     Instance * instance;
     VkCommandPool command_pool;
     VkCommandBuffer command_buffer;
+    VkSemaphore semaphore;
     VkBool32 present;
 };
 
@@ -488,6 +489,9 @@ void bind_buffer(Buffer * buffer);
 
 void new_temp_buffer(Instance * instance, HostBuffer * temp, VkDeviceSize size);
 void free_temp_buffer(Instance * instance, HostBuffer * temp);
+
+void copy_present_images(Instance * self);
+void present_images(Instance * self);
 
 void build_mipmaps(BuildMipmapsInfo args);
 

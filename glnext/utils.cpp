@@ -33,61 +33,7 @@ void end_commands(Instance * self) {
 }
 
 void end_commands_with_present(Instance * self) {
-    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-        self->vkAcquireNextImageKHR(
-            self->device,
-            self->presenter.swapchain_array[i],
-            UINT64_MAX,
-            self->presenter.semaphore_array[i],
-            NULL,
-            &self->presenter.index_array[i]
-        );
-    }
-
-    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-        VkImage image = self->presenter.image_array[i].image_array[self->presenter.index_array[i]];
-        self->presenter.copy_image_barrier_array[i].image = image;
-        self->presenter.present_image_barrier_array[i].image = image;
-    }
-
-    self->vkCmdPipelineBarrier(
-        self->command_buffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0,
-        0,
-        NULL,
-        0,
-        NULL,
-        self->presenter.surface_count,
-        self->presenter.copy_image_barrier_array
-    );
-
-    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-        self->vkCmdBlitImage(
-            self->command_buffer,
-            self->presenter.image_source_array[i],
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            self->presenter.image_array[i].image_array[self->presenter.index_array[i]],
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1,
-            &self->presenter.image_blit_array[i],
-            VK_FILTER_NEAREST
-        );
-    }
-
-    self->vkCmdPipelineBarrier(
-        self->command_buffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0,
-        0,
-        NULL,
-        0,
-        NULL,
-        self->presenter.surface_count,
-        self->presenter.present_image_barrier_array
-    );
+    copy_present_images(self);
 
     self->vkEndCommandBuffer(self->command_buffer);
 
@@ -107,32 +53,7 @@ void end_commands_with_present(Instance * self) {
     self->vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
     self->vkResetFences(self->device, 1, &self->fence);
 
-    if (self->presenter.surface_count) {
-        VkPresentInfoKHR present_info = {
-            VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            NULL,
-            0,
-            NULL,
-            self->presenter.surface_count,
-            self->presenter.swapchain_array,
-            self->presenter.index_array,
-            self->presenter.result_array,
-        };
-
-        self->vkQueuePresentKHR(self->queue, &present_info);
-
-        uint32_t idx = 0;
-        while (idx < self->presenter.surface_count) {
-            if (self->presenter.result_array[idx] == VK_ERROR_OUT_OF_DATE_KHR) {
-                self->vkDestroySemaphore(self->device, self->presenter.semaphore_array[idx], NULL);
-                self->vkDestroySwapchainKHR(self->device, self->presenter.swapchain_array[idx], NULL);
-                self->vkDestroySurfaceKHR(self->instance, self->presenter.surface_array[idx], NULL);
-                presenter_remove(&self->presenter, idx);
-                continue;
-            }
-            idx += 1;
-        }
-    }
+    present_images(self);
 }
 
 Memory * new_memory(Instance * self, VkBool32 host) {
@@ -421,6 +342,99 @@ void build_mipmaps(BuildMipmapsInfo args) {
             image_barrier_count,
             image_barrier_array
         );
+    }
+}
+
+void copy_present_images(Instance * self) {
+    if (!self->presenter.surface_count) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        self->vkAcquireNextImageKHR(
+            self->device,
+            self->presenter.swapchain_array[i],
+            UINT64_MAX,
+            self->presenter.semaphore_array[i],
+            NULL,
+            &self->presenter.index_array[i]
+        );
+    }
+
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        VkImage image = self->presenter.image_array[i].image_array[self->presenter.index_array[i]];
+        self->presenter.copy_image_barrier_array[i].image = image;
+        self->presenter.present_image_barrier_array[i].image = image;
+    }
+
+    self->vkCmdPipelineBarrier(
+        self->command_buffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0,
+        NULL,
+        0,
+        NULL,
+        self->presenter.surface_count,
+        self->presenter.copy_image_barrier_array
+    );
+
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        self->vkCmdBlitImage(
+            self->command_buffer,
+            self->presenter.image_source_array[i],
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            self->presenter.image_array[i].image_array[self->presenter.index_array[i]],
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &self->presenter.image_blit_array[i],
+            VK_FILTER_NEAREST
+        );
+    }
+
+    self->vkCmdPipelineBarrier(
+        self->command_buffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0,
+        NULL,
+        0,
+        NULL,
+        self->presenter.surface_count,
+        self->presenter.present_image_barrier_array
+    );
+}
+
+void present_images(Instance * self) {
+    if (!self->presenter.surface_count) {
+        return;
+    }
+
+    VkPresentInfoKHR present_info = {
+        VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        NULL,
+        0,
+        NULL,
+        self->presenter.surface_count,
+        self->presenter.swapchain_array,
+        self->presenter.index_array,
+        self->presenter.result_array,
+    };
+
+    self->vkQueuePresentKHR(self->queue, &present_info);
+
+    uint32_t idx = 0;
+    while (idx < self->presenter.surface_count) {
+        if (self->presenter.result_array[idx] == VK_ERROR_OUT_OF_DATE_KHR) {
+            self->vkDestroySemaphore(self->device, self->presenter.semaphore_array[idx], NULL);
+            self->vkDestroySwapchainKHR(self->device, self->presenter.swapchain_array[idx], NULL);
+            self->vkDestroySurfaceKHR(self->instance, self->presenter.surface_array[idx], NULL);
+            presenter_remove(&self->presenter, idx);
+            continue;
+        }
+        idx += 1;
     }
 }
 

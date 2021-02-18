@@ -57,6 +57,9 @@ Batch * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs)
 
     res->instance->vkAllocateCommandBuffers(res->instance->device, &command_buffer_allocate_info, &res->command_buffer);
 
+    VkSemaphoreCreateInfo semaphore_create_info = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, NULL, 0};
+    self->vkCreateSemaphore(self->device, &semaphore_create_info, NULL, &res->semaphore);
+
     VkCommandBufferBeginInfo command_buffer_begin_info = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         NULL,
@@ -91,25 +94,64 @@ Batch * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs)
 }
 
 PyObject * Batch_meth_run(Batch * self) {
-    VkSubmitInfo submit_info = {
-        VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        NULL,
-        0,
-        NULL,
-        NULL,
-        1,
-        &self->command_buffer,
-        0,
-        NULL,
-    };
-
-    self->instance->vkQueueSubmit(self->instance->queue, 1, &submit_info, self->instance->fence);
-    self->instance->vkWaitForFences(self->instance->device, 1, &self->instance->fence, true, UINT64_MAX);
-    self->instance->vkResetFences(self->instance->device, 1, &self->instance->fence);
-
-    if (self->present && self->instance->presenter.surface_count) {
+    if (self->present) {
         begin_commands(self->instance);
-        end_commands_with_present(self->instance);
+        copy_present_images(self->instance);
+
+        self->instance->vkEndCommandBuffer(self->instance->command_buffer);
+
+        uint32_t present_semaphore_count = self->instance->presenter.surface_count;
+        self->instance->presenter.semaphore_array[present_semaphore_count] = self->semaphore;
+        self->instance->presenter.wait_stage_array[present_semaphore_count] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        present_semaphore_count += 1;
+
+        VkSubmitInfo submit_array[2] = {
+            {
+                VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                NULL,
+                0,
+                NULL,
+                NULL,
+                1,
+                &self->command_buffer,
+                1,
+                &self->semaphore,
+            },
+            {
+                VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                NULL,
+                present_semaphore_count,
+                self->instance->presenter.semaphore_array,
+                self->instance->presenter.wait_stage_array,
+                1,
+                &self->command_buffer,
+                0,
+                NULL,
+            },
+        };
+
+        self->instance->vkQueueSubmit(self->instance->queue, 2, submit_array, self->instance->fence);
+        self->instance->vkWaitForFences(self->instance->device, 1, &self->instance->fence, true, UINT64_MAX);
+        self->instance->vkResetFences(self->instance->device, 1, &self->instance->fence);
+
+        present_images(self->instance);
+    }
+
+    if (!self->present) {
+        VkSubmitInfo submit_info = {
+            VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            NULL,
+            0,
+            NULL,
+            NULL,
+            1,
+            &self->command_buffer,
+            0,
+            NULL,
+        };
+        self->instance->vkQueueSubmit(self->instance->queue, 1, &submit_info, self->instance->fence);
+        self->instance->vkWaitForFences(self->instance->device, 1, &self->instance->fence, true, UINT64_MAX);
+        self->instance->vkResetFences(self->instance->device, 1, &self->instance->fence);
     }
 
     Py_RETURN_NONE;
