@@ -106,6 +106,8 @@ struct Presenter {
     VkSurfaceKHR surface_array[64];
     VkSwapchainKHR swapchain_array[64];
     VkPipelineStageFlags wait_stage_array[64];
+    VkImageMemoryBarrier copy_image_barrier_array[64];
+    VkImageMemoryBarrier present_image_barrier_array[64];
     VkSemaphore semaphore_array[64];
     VkImage image_source_array[64];
     VkImageBlit image_blit_array[64];

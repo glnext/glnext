@@ -44,38 +44,24 @@ void end_commands_with_present(Instance * self) {
         );
     }
 
-    if (self->presenter.surface_count) {
-        uint32_t image_barrier_count = 0;
-        VkImageMemoryBarrier image_barrier_array[64];
-
-        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-            image_barrier_array[image_barrier_count++] = {
-                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                NULL,
-                0,
-                0,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_QUEUE_FAMILY_IGNORED,
-                VK_QUEUE_FAMILY_IGNORED,
-                self->presenter.image_array[i].image_array[self->presenter.index_array[i]],
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-            };
-        }
-
-        self->vkCmdPipelineBarrier(
-            self->command_buffer,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0,
-            NULL,
-            0,
-            NULL,
-            image_barrier_count,
-            image_barrier_array
-        );
+    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
+        VkImage image = self->presenter.image_array[i].image_array[self->presenter.index_array[i]];
+        self->presenter.copy_image_barrier_array[i].image = image;
+        self->presenter.present_image_barrier_array[i].image = image;
     }
+
+    self->vkCmdPipelineBarrier(
+        self->command_buffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0,
+        NULL,
+        0,
+        NULL,
+        self->presenter.surface_count,
+        self->presenter.copy_image_barrier_array
+    );
 
     for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
         self->vkCmdBlitImage(
@@ -90,38 +76,18 @@ void end_commands_with_present(Instance * self) {
         );
     }
 
-    if (self->presenter.surface_count) {
-        uint32_t image_barrier_count = 0;
-        VkImageMemoryBarrier image_barrier_array[64];
-
-        for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-            image_barrier_array[image_barrier_count++] = {
-                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                NULL,
-                0,
-                0,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                VK_QUEUE_FAMILY_IGNORED,
-                VK_QUEUE_FAMILY_IGNORED,
-                self->presenter.image_array[i].image_array[self->presenter.index_array[i]],
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-            };
-        }
-
-        self->vkCmdPipelineBarrier(
-            self->command_buffer,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-            0,
-            0,
-            NULL,
-            0,
-            NULL,
-            image_barrier_count,
-            image_barrier_array
-        );
-    }
+    self->vkCmdPipelineBarrier(
+        self->command_buffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0,
+        NULL,
+        0,
+        NULL,
+        self->presenter.surface_count,
+        self->presenter.present_image_barrier_array
+    );
 
     self->vkEndCommandBuffer(self->command_buffer);
 
@@ -663,6 +629,8 @@ void presenter_remove(Presenter * self, uint32_t index) {
         self->surface_array[i] = self->surface_array[i + 1];
         self->swapchain_array[i] = self->swapchain_array[i + 1];
         self->wait_stage_array[i] = self->wait_stage_array[i + 1];
+        self->copy_image_barrier_array[i] = self->copy_image_barrier_array[i + 1];
+        self->present_image_barrier_array[i] = self->present_image_barrier_array[i + 1];
         self->semaphore_array[i] = self->semaphore_array[i + 1];
         self->image_source_array[i] = self->image_source_array[i + 1];
         self->image_blit_array[i] = self->image_blit_array[i + 1];
