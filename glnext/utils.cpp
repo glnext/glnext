@@ -253,6 +253,7 @@ Image * new_image(ImageCreateInfo info) {
     res->mode = info.mode;
     res->format = info.format;
     res->image = NULL;
+    res->bound = false;
 
     VkImageCreateFlags flags = 0;
     if (info.mode == IMG_STORAGE) {
@@ -296,6 +297,7 @@ Buffer * new_buffer(BufferCreateInfo info) {
     res->size = info.size;
     res->usage = info.usage;
     res->buffer = NULL;
+    res->bound = false;
 
     VkBufferCreateInfo buffer_info = {
         VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -319,11 +321,17 @@ Buffer * new_buffer(BufferCreateInfo info) {
 }
 
 void bind_image(Image * self) {
-    self->instance->vkBindImageMemory(self->instance->device, self->image, self->memory->memory, self->offset);
+    if (!self->bound) {
+        self->instance->vkBindImageMemory(self->instance->device, self->image, self->memory->memory, self->offset);
+        self->bound = true;
+    }
 }
 
 void bind_buffer(Buffer * self) {
-    self->instance->vkBindBufferMemory(self->instance->device, self->buffer, self->memory->memory, self->offset);
+    if (!self->bound) {
+        self->instance->vkBindBufferMemory(self->instance->device, self->buffer, self->memory->memory, self->offset);
+        self->bound = true;
+    }
 }
 
 void new_temp_buffer(Instance * self, HostBuffer * temp, VkDeviceSize size) {

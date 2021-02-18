@@ -378,6 +378,7 @@ struct Buffer {
     VkDeviceSize size;
     VkBufferUsageFlags usage;
     VkBuffer buffer;
+    VkBool32 bound;
 };
 
 struct Image {
@@ -394,6 +395,7 @@ struct Image {
     ImageMode mode;
     VkFormat format;
     VkImage image;
+    VkBool32 bound;
 };
 
 struct StagingBuffer {

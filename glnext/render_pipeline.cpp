@@ -1,5 +1,16 @@
 #include "glnext.hpp"
 
+Buffer * get_buffer(Instance * instance, PyObject * obj) {
+    if (obj == Py_None) {
+        return NULL;
+    }
+    if (Py_TYPE(obj) == instance->state->Buffer_type) {
+        return (Buffer *)obj;
+    }
+    PyErr_Format(PyExc_ValueError, "invalid buffer");
+    return NULL;
+}
+
 RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "vertex_shader",
@@ -116,10 +127,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         binding_array[i] = {i, istride, VK_VERTEX_INPUT_RATE_INSTANCE};
     }
 
-    if (!args.vertex_count && vstride && args.vertex_buffer != Py_None) {
-        args.vertex_count = (uint32_t)PyBytes_Size(args.vertex_buffer) / vstride;
-    }
-
     res->parameters = {
         true,
         args.vertex_count,
@@ -141,48 +148,64 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         }
     }
 
-    res->vertex_buffer = NULL;
-    res->instance_buffer = NULL;
-    res->index_buffer = NULL;
-    res->indirect_buffer = NULL;
+    res->vertex_buffer = get_buffer(self->instance, args.vertex_buffer);
+    res->instance_buffer = get_buffer(self->instance, args.instance_buffer);
+    res->index_buffer = get_buffer(self->instance, args.index_buffer);
+    res->indirect_buffer = get_buffer(self->instance, args.indirect_buffer);
 
-    if (vstride && args.vertex_count) {
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+
+    if (vstride && !res->vertex_buffer) {
         res->vertex_buffer = new_buffer({
             self->instance,
             memory,
             vstride * args.vertex_count,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         });
-        PyDict_SetItemString(res->members, "vertex_buffer", (PyObject *)res->vertex_buffer);
     }
 
-    if (istride && args.instance_count) {
+    if (istride && !res->instance_buffer) {
         res->instance_buffer = new_buffer({
             self->instance,
             memory,
             istride * args.instance_count,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         });
-        PyDict_SetItemString(res->members, "instance_buffer", (PyObject *)res->instance_buffer);
     }
 
-    if (args.index_count) {
+    if (args.index_count && !res->index_buffer) {
         res->index_buffer = new_buffer({
             self->instance,
             memory,
             args.index_count * index_size,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         });
-        PyDict_SetItemString(res->members, "index_buffer", (PyObject *)res->index_buffer);
     }
 
-    if (args.indirect_count) {
+    if (args.indirect_count && !res->indirect_buffer) {
         res->indirect_buffer = new_buffer({
             self->instance,
             memory,
             args.indirect_count * indirect_size,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
         });
+    }
+
+    if (res->vertex_buffer) {
+        PyDict_SetItemString(res->members, "vertex_buffer", (PyObject *)res->vertex_buffer);
+    }
+
+    if (res->instance_buffer) {
+        PyDict_SetItemString(res->members, "instance_buffer", (PyObject *)res->instance_buffer);
+    }
+
+    if (res->index_buffer) {
+        PyDict_SetItemString(res->members, "index_buffer", (PyObject *)res->index_buffer);
+    }
+
+    if (res->indirect_buffer) {
         PyDict_SetItemString(res->members, "indirect_buffer", (PyObject *)res->indirect_buffer);
     }
 
@@ -210,10 +233,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     for (uint32_t i = 0; i < res->binding_count; ++i) {
         bind_descriptor_binding_objects(self->instance, &res->binding_array[i]);
-    }
-
-    if (args.vertex_buffer != Py_None) {
-        Buffer_meth_write(res->vertex_buffer, args.vertex_buffer);
     }
 
     res->attribute_count = attribute_count;
@@ -586,11 +605,11 @@ void execute_render_pipeline(RenderPipeline * self) {
         );
     }
 
-    if (self->parameters.indirect_count && self->parameters.index_count) {
+    if (self->indirect_buffer && self->index_buffer) {
         self->instance->vkCmdDrawIndexedIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 20);
-    } else if (self->parameters.indirect_count) {
+    } else if (self->indirect_buffer) {
         self->instance->vkCmdDrawIndirect(self->instance->command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 16);
-    } else if (self->parameters.index_count) {
+    } else if (self->index_buffer) {
         self->instance->vkCmdDrawIndexed(self->instance->command_buffer, self->parameters.index_count, self->parameters.instance_count, 0, 0, 0);
     } else {
         self->instance->vkCmdDraw(self->instance->command_buffer, self->parameters.vertex_count, self->parameters.instance_count, 0, 0);
