@@ -195,8 +195,6 @@ int module_exec(PyObject * self) {
     state->texture_str = PyUnicode_FromString("texture");
     state->output_str = PyUnicode_FromString("output");
 
-    PyModule_AddStringConstant(self, "default_surface", DEFAULT_SURFACE);
-
     return 0;
 }
 
