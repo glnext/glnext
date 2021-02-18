@@ -192,7 +192,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
         VK_QUEUE_FAMILY_IGNORED,
         VK_QUEUE_FAMILY_IGNORED,
         self->image,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, self->levels, 0, self->layers},
     };
 
     self->instance->vkCmdPipelineBarrier(
@@ -253,31 +253,17 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
             &image_barrier_general
         );
     } else {
-        VkImageMemoryBarrier image_barriers[] = {
-            {
-                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                NULL,
-                0,
-                0,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_QUEUE_FAMILY_IGNORED,
-                VK_QUEUE_FAMILY_IGNORED,
-                self->image,
-                {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
-            },
-            {
-                VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                NULL,
-                0,
-                0,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_QUEUE_FAMILY_IGNORED,
-                VK_QUEUE_FAMILY_IGNORED,
-                self->image,
-                {VK_IMAGE_ASPECT_COLOR_BIT, 1, self->levels - 1, 0, self->layers},
-            },
+        VkImageMemoryBarrier image_barrier = {
+            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            NULL,
+            0,
+            0,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_QUEUE_FAMILY_IGNORED,
+            VK_QUEUE_FAMILY_IGNORED,
+            self->image,
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, self->layers},
         };
 
         self->instance->vkCmdPipelineBarrier(
@@ -289,8 +275,8 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
             NULL,
             0,
             NULL,
-            2,
-            image_barriers
+            1,
+            &image_barrier
         );
 
         build_mipmaps({
