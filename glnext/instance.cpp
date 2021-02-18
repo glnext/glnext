@@ -60,7 +60,11 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     const char * surface = NULL;
 
     if (args.surface == Py_True) {
-        surface = DEFAULT_SURFACE;
+        surface = getenv("GLNEXT_SURFACE");
+
+        if (!surface) {
+            surface = DEFAULT_SURFACE;
+        }
     }
 
     if (PyUnicode_CheckExact(args.surface)) {
@@ -126,6 +130,10 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     if (args.debug) {
         instance_layer_array[instance_layer_count++] = "VK_LAYER_KHRONOS_validation";
         instance_extension_array[instance_extension_count++] = "VK_EXT_debug_utils";
+    }
+
+    if (getenv("GLNEXT_VALIDATION")) {
+        instance_layer_array[instance_layer_count++] = "VK_LAYER_KHRONOS_validation";
     }
 
     res->vkGetInstanceProcAddr = vkGetInstanceProcAddr;
