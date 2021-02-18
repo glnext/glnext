@@ -123,7 +123,7 @@ PyObject * Batch_meth_run(Batch * self) {
                 self->instance->presenter.semaphore_array,
                 self->instance->presenter.wait_stage_array,
                 1,
-                &self->command_buffer,
+                &self->instance->command_buffer,
                 0,
                 NULL,
             },
