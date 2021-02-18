@@ -53,8 +53,6 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
 
         bool is_image = false;
         bool is_buffer = false;
-        bool is_render_pipeline = false;
-        bool is_compute_pipeline = false;
         bool is_input = false;
         bool is_output = false;
 
@@ -82,16 +80,6 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
             is_buffer = true;
             is_input = true;
             is_output = true;
-        }
-
-        if (!PyUnicode_CompareWithASCIIString(type, "render_parameters")) {
-            is_render_pipeline = true;
-            is_input = true;
-        }
-
-        if (!PyUnicode_CompareWithASCIIString(type, "compute_parameters")) {
-            is_compute_pipeline = true;
-            is_input = true;
         }
 
         if (!is_input && !is_output) {
@@ -129,36 +117,6 @@ StagingBuffer * Instance_meth_staging(Instance * self, PyObject * vargs, PyObjec
 
             if (max_size < offset + image->size) {
                 max_size = offset + image->size;
-            }
-        }
-
-        if (is_render_pipeline) {
-            RenderPipeline * pipeline = (RenderPipeline *)PyDict_GetItemString(obj, "pipeline");
-
-            if (!pipeline || Py_TYPE(pipeline) != self->state->RenderPipeline_type) {
-                PyErr_Format(PyExc_ValueError, "pipeline");
-                return NULL;
-            }
-
-            res->binding_array[k].render_pipeline = pipeline;
-
-            if (max_size < offset + sizeof(RenderParameters)) {
-                max_size = offset + sizeof(RenderParameters);
-            }
-        }
-
-        if (is_compute_pipeline) {
-            ComputePipeline * pipeline = (ComputePipeline *)PyDict_GetItemString(obj, "pipeline");
-
-            if (!pipeline || Py_TYPE(pipeline) != self->state->ComputePipeline_type) {
-                PyErr_Format(PyExc_ValueError, "pipeline");
-                return NULL;
-            }
-
-            res->binding_array[k].compute_pipeline = pipeline;
-
-            if (max_size < offset + sizeof(ComputeParameters)) {
-                max_size = offset + sizeof(ComputeParameters);
             }
         }
     }
