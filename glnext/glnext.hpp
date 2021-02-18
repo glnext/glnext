@@ -159,6 +159,8 @@ struct Instance {
     uint32_t device_memory_type_index;
     VkFormat depth_format;
 
+    VkBool32 dedicated_allocation;
+
     Presenter presenter;
 
     PyObject * task_list;
@@ -174,6 +176,7 @@ struct Instance {
     PFN_vkCreateInstance vkCreateInstance;
     PFN_vkDestroyInstance vkDestroyInstance;
     PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
+    PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
     PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
     PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties;
     PFN_vkGetPhysicalDeviceFeatures vkGetPhysicalDeviceFeatures;
@@ -479,7 +482,7 @@ Memory * get_memory(Instance * instance, PyObject * memory);
 
 VkDeviceSize take_memory(Memory * self, VkMemoryRequirements * requirements);
 
-void allocate_memory(Memory * self);
+void allocate_memory(Memory * self, VkMemoryDedicatedAllocateInfo * dedicated = NULL);
 void free_memory(Memory * self);
 
 Image * new_image(ImageCreateInfo info);

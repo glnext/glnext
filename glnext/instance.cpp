@@ -89,6 +89,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->command_buffer = NULL;
     res->fence = NULL;
 
+    res->dedicated_allocation = false;
+
     res->presenter = {};
 
     res->task_list = PyList_New(0);
@@ -234,6 +236,19 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     VkPhysicalDeviceFeatures physical_device_features = {};
     physical_device_features.multiDrawIndirect = supported_features.multiDrawIndirect;
     physical_device_features.samplerAnisotropy = supported_features.samplerAnisotropy;
+
+    uint32_t extension_count = 0;
+    res->vkEnumerateDeviceExtensionProperties(res->physical_device, NULL, &extension_count, NULL);
+    VkExtensionProperties * extension_array = allocate<VkExtensionProperties>(extension_count);
+    res->vkEnumerateDeviceExtensionProperties(res->physical_device, NULL, &extension_count, extension_array);
+    for (uint32_t i = 0; i < extension_count; ++i) {
+        if (!strcmp(extension_array[i].extensionName, "VK_KHR_dedicated_allocation")) {
+            device_extension_array[device_extension_count++] = "VK_KHR_get_memory_requirements2";
+            device_extension_array[device_extension_count++] = "VK_KHR_dedicated_allocation";
+            res->dedicated_allocation = true;
+        }
+    }
+    free(extension_array);
 
     VkDeviceCreateInfo device_create_info = {
         VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,

@@ -88,7 +88,7 @@ VkDeviceSize take_memory(Memory * self, VkMemoryRequirements * requirements) {
     return res;
 }
 
-void allocate_memory(Memory * self) {
+void allocate_memory(Memory * self, VkMemoryDedicatedAllocateInfo * dedicated) {
     if (self->size) {
         return;
     }
@@ -99,7 +99,7 @@ void allocate_memory(Memory * self) {
 
     VkMemoryAllocateInfo memory_allocate_info = {
         VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        NULL,
+        dedicated,
         self->offset,
         self->host ? self->instance->host_memory_type_index : self->instance->device_memory_type_index,
     };
@@ -169,7 +169,20 @@ Image * new_image(ImageCreateInfo info) {
 
     VkMemoryRequirements requirements = {};
     info.instance->vkGetImageMemoryRequirements(info.instance->device, res->image, &requirements);
-    res->offset = take_memory(info.memory, &requirements);
+
+    if (info.instance->dedicated_allocation && info.mode == IMG_PROTECTED) {
+        VkMemoryDedicatedAllocateInfo dedicated_info = {
+            VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+            NULL,
+            res->image,
+            NULL,
+        };
+        res->memory = new_memory(info.instance);
+        res->offset = take_memory(res->memory, &requirements);
+        allocate_memory(res->memory, &dedicated_info);
+    } else {
+        res->offset = take_memory(res->memory, &requirements);
+    }
 
     PyList_Append(info.instance->image_list, (PyObject *)res);
     return res;
