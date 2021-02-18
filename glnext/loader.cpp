@@ -30,6 +30,8 @@ PFN_vkGetInstanceProcAddr get_instance_proc_addr(const char * backend) {
 void load_library_methods(Instance * self) {
     #define load(name) self->name = (PFN_ ## name)self->vkGetInstanceProcAddr(NULL, #name);
 
+    load(vkEnumerateInstanceLayerProperties);
+    load(vkEnumerateInstanceExtensionProperties);
     load(vkCreateInstance);
 
     #undef load

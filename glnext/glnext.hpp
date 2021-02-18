@@ -159,7 +159,10 @@ struct Instance {
     uint32_t device_memory_type_index;
     VkFormat depth_format;
 
+    VkBool32 validation_layer;
+    VkBool32 debug_utils;
     VkBool32 dedicated_allocation;
+    VkBool32 mesh_shader;
 
     Presenter presenter;
 
@@ -173,6 +176,8 @@ struct Instance {
     ModuleState * state;
 
     PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+    PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
+    PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties;
     PFN_vkCreateInstance vkCreateInstance;
     PFN_vkDestroyInstance vkDestroyInstance;
     PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
