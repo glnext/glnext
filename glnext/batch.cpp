@@ -1,6 +1,6 @@
 #include "glnext.hpp"
 
-Task * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs) {
+Batch * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "tasks",
         "staging_buffers",
@@ -33,7 +33,7 @@ Task * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs) 
     uint32_t task_count = (uint32_t)PyList_Size(args.tasks);
     uint32_t staging_buffer_count = (uint32_t)PyList_Size(args.staging_buffers);
 
-    Task * res = PyObject_New(Task, self->state->Task_type);
+    Batch * res = PyObject_New(Batch, self->state->Batch_type);
 
     res->instance = self;
     res->present = args.present;
@@ -73,12 +73,11 @@ Task * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs) 
 
     for (uint32_t i = 0; i < task_count; ++i) {
         PyObject * obj = PyList_GetItem(args.tasks, i);
-        res->task_array[i] = obj;
         if (Py_TYPE(obj) == self->state->Framebuffer_type) {
-            res->task_callback_array[i] = (TaskCallback)execute_framebuffer;
+            execute_framebuffer((Framebuffer *)obj);
         }
         if (Py_TYPE(obj) == self->state->ComputePipeline_type) {
-            res->task_callback_array[i] = (TaskCallback)execute_compute_pipeline;
+            execute_compute_pipeline((ComputePipeline *)obj);
         }
     }
 
@@ -91,7 +90,7 @@ Task * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs) 
     return res;
 }
 
-PyObject * Task_meth_run(Task * self) {
+PyObject * Batch_meth_run(Batch * self) {
     VkSubmitInfo submit_info = {
         VK_STRUCTURE_TYPE_SUBMIT_INFO,
         NULL,

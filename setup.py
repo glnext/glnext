@@ -29,6 +29,7 @@ glnext = Extension(
     name='glnext',
     sources=['glnext/glnext.cpp'],
     depends=[
+        'glnext/batch.cpp',
         'glnext/binding.cpp',
         'glnext/buffer.cpp',
         'glnext/compute_pipeline.cpp',
@@ -42,7 +43,6 @@ glnext = Extension(
         'glnext/render_pipeline.cpp',
         'glnext/staging_buffer.cpp',
         'glnext/surface.cpp',
-        'glnext/task.cpp',
         'glnext/tools.cpp',
         'glnext/utils.cpp',
     ],

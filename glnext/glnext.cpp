@@ -37,8 +37,8 @@ PyMethodDef Instance_methods[] = {
     {},
 };
 
-PyMethodDef Task_methods[] = {
-    {"run", (PyCFunction)Task_meth_run, METH_NOARGS, NULL},
+PyMethodDef Batch_methods[] = {
+    {"run", (PyCFunction)Batch_meth_run, METH_NOARGS, NULL},
     {},
 };
 
@@ -109,8 +109,8 @@ PyType_Slot Instance_slots[] = {
     {},
 };
 
-PyType_Slot Task_slots[] = {
-    {Py_tp_methods, Task_methods},
+PyType_Slot Batch_slots[] = {
+    {Py_tp_methods, Batch_methods},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
@@ -162,7 +162,7 @@ PyType_Slot StagingBuffer_slots[] = {
 };
 
 PyType_Spec Instance_spec = {"glnext.Instance", sizeof(Instance), 0, Py_TPFLAGS_DEFAULT, Instance_slots};
-PyType_Spec Task_spec = {"glnext.Task", sizeof(Task), 0, Py_TPFLAGS_DEFAULT, Task_slots};
+PyType_Spec Batch_spec = {"glnext.Batch", sizeof(Batch), 0, Py_TPFLAGS_DEFAULT, Batch_slots};
 PyType_Spec Framebuffer_spec = {"glnext.Framebuffer", sizeof(Framebuffer), 0, Py_TPFLAGS_DEFAULT, Framebuffer_slots};
 PyType_Spec RenderPipeline_spec = {"glnext.RenderPipeline", sizeof(RenderPipeline), 0, Py_TPFLAGS_DEFAULT, RenderPipeline_slots};
 PyType_Spec ComputePipeline_spec = {"glnext.ComputePipeline", sizeof(ComputePipeline), 0, Py_TPFLAGS_DEFAULT, ComputePipeline_slots};
@@ -175,7 +175,7 @@ int module_exec(PyObject * self) {
     ModuleState * state = (ModuleState *)PyModule_GetState(self);
 
     state->Instance_type = (PyTypeObject *)PyType_FromSpec(&Instance_spec);
-    state->Task_type = (PyTypeObject *)PyType_FromSpec(&Task_spec);
+    state->Batch_type = (PyTypeObject *)PyType_FromSpec(&Batch_spec);
     state->Framebuffer_type = (PyTypeObject *)PyType_FromSpec(&Framebuffer_spec);
     state->RenderPipeline_type = (PyTypeObject *)PyType_FromSpec(&RenderPipeline_spec);
     state->ComputePipeline_type = (PyTypeObject *)PyType_FromSpec(&ComputePipeline_spec);

@@ -112,7 +112,7 @@ struct Presenter {
 
 struct ModuleState {
     PyTypeObject * Instance_type;
-    PyTypeObject * Task_type;
+    PyTypeObject * Batch_type;
     PyTypeObject * Framebuffer_type;
     PyTypeObject * RenderPipeline_type;
     PyTypeObject * ComputePipeline_type;
@@ -245,18 +245,11 @@ struct Instance {
     PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
 };
 
-typedef void (* TaskCallback)(PyObject * obj);
-
-struct Task {
+struct Batch {
     PyObject_HEAD
     Instance * instance;
     VkCommandPool command_pool;
     VkCommandBuffer command_buffer;
-    uint32_t staging_buffer_count;
-    StagingBuffer ** staging_buffer_array;
-    uint32_t task_count;
-    PyObject ** task_array;
-    TaskCallback * task_callback_array;
     VkBool32 present;
 };
 
