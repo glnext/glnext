@@ -196,7 +196,6 @@ int module_exec(PyObject * self) {
     state->output_str = PyUnicode_FromString("output");
 
     PyModule_AddStringConstant(self, "default_surface", DEFAULT_SURFACE);
-    PyModule_AddObject(self, "execute_task", PyLong_FromVoidPtr((void *)execute_task));
 
     return 0;
 }

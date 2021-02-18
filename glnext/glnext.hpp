@@ -250,6 +250,8 @@ typedef void (* TaskCallback)(PyObject * obj);
 struct Task {
     PyObject_HEAD
     Instance * instance;
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer;
     uint32_t staging_buffer_count;
     StagingBuffer ** staging_buffer_array;
     uint32_t task_count;
@@ -463,7 +465,6 @@ void create_descriptor_binding_objects(Instance * instance, DescriptorBinding * 
 void bind_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding);
 
 void execute_instance(Instance * self);
-void execute_task(Task * self);
 void execute_framebuffer(Framebuffer * self);
 void execute_render_pipeline(RenderPipeline * self);
 void execute_compute_pipeline(ComputePipeline * self);

@@ -38,9 +38,38 @@ Task * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs) 
     res->instance = self;
     res->present = args.present;
 
-    res->task_count = task_count;
-    res->task_array = (PyObject **)PyMem_Malloc(sizeof(PyObject *) * task_count);
-    res->task_callback_array = (TaskCallback *)PyMem_Malloc(sizeof(TaskCallback) * task_count);
+    VkCommandPoolCreateInfo command_pool_create_info = {
+        VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        NULL,
+        0,
+        res->instance->queue_family_index,
+    };
+
+    res->instance->vkCreateCommandPool(res->instance->device, &command_pool_create_info, NULL, &res->command_pool);
+
+    VkCommandBufferAllocateInfo command_buffer_allocate_info = {
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        NULL,
+        res->command_pool,
+        VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        1,
+    };
+
+    res->instance->vkAllocateCommandBuffers(res->instance->device, &command_buffer_allocate_info, &res->command_buffer);
+
+    VkCommandBufferBeginInfo command_buffer_begin_info = {
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        NULL,
+        0,
+        NULL,
+    };
+
+    res->instance->vkBeginCommandBuffer(res->command_buffer, &command_buffer_begin_info);
+
+    for (uint32_t i = 0; i < staging_buffer_count; ++i) {
+        PyObject * obj = PyList_GetItem(args.staging_buffers, i);
+        execute_staging_buffer_input((StagingBuffer *)obj);
+    }
 
     for (uint32_t i = 0; i < task_count; ++i) {
         PyObject * obj = PyList_GetItem(args.tasks, i);
@@ -53,39 +82,36 @@ Task * Instance_meth_task(Instance * self, PyObject * vargs, PyObject * kwargs) 
         }
     }
 
-    res->staging_buffer_count = staging_buffer_count;
-    res->staging_buffer_array = (StagingBuffer **)PyMem_Malloc(sizeof(StagingBuffer *) * staging_buffer_count);
-
     for (uint32_t i = 0; i < staging_buffer_count; ++i) {
-        res->staging_buffer_array[i] = (StagingBuffer *)PyList_GetItem(args.staging_buffers, i);
+        PyObject * obj = PyList_GetItem(args.staging_buffers, i);
+        execute_staging_buffer_output((StagingBuffer *)obj);
     }
 
+    self->vkEndCommandBuffer(res->command_buffer);
     return res;
 }
 
-void execute_task(Task * self) {
-    begin_commands(self->instance);
+PyObject * Task_meth_run(Task * self) {
+    VkSubmitInfo submit_info = {
+        VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        NULL,
+        0,
+        NULL,
+        NULL,
+        1,
+        &self->command_buffer,
+        0,
+        NULL,
+    };
 
-    for (uint32_t i = 0; i < self->staging_buffer_count; ++i) {
-        execute_staging_buffer_input(self->staging_buffer_array[i]);
-    }
-
-    for (uint32_t i = 0; i < self->task_count; ++i) {
-        self->task_callback_array[i](self->task_array[i]);
-    }
-
-    for (uint32_t i = 0; i < self->staging_buffer_count; ++i) {
-        execute_staging_buffer_output(self->staging_buffer_array[i]);
-    }
+    self->instance->vkQueueSubmit(self->instance->queue, 1, &submit_info, self->instance->fence);
+    self->instance->vkWaitForFences(self->instance->device, 1, &self->instance->fence, true, UINT64_MAX);
+    self->instance->vkResetFences(self->instance->device, 1, &self->instance->fence);
 
     if (self->present && self->instance->presenter.surface_count) {
+        begin_commands(self->instance);
         end_commands_with_present(self->instance);
-    } else {
-        end_commands(self->instance);
     }
-}
 
-PyObject * Task_meth_run(Task * self) {
-    execute_task(self);
     Py_RETURN_NONE;
 }
