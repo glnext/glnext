@@ -158,21 +158,17 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
     VkSemaphoreCreateInfo semaphore_create_info = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, NULL, 0};
     self->vkCreateSemaphore(self->device, &semaphore_create_info, NULL, &semaphore);
 
-    uint32_t swapchain_image_count = 0;
-    self->vkGetSwapchainImagesKHR(self->device, swapchain, &swapchain_image_count, NULL);
-    VkImage * swapchain_image_array = (VkImage *)malloc(sizeof(VkImage) * swapchain_image_count);
-    self->vkGetSwapchainImagesKHR(self->device, swapchain, &swapchain_image_count, swapchain_image_array);
+    SwapChainImages images = {};
+    self->vkGetSwapchainImagesKHR(self->device, swapchain, &images.image_count, NULL);
+    self->vkGetSwapchainImagesKHR(self->device, swapchain, &images.image_count, images.image_array);
 
     uint32_t idx = self->presenter.surface_count++;
-
-    presenter_resize(&self->presenter);
 
     self->presenter.surface_array[idx] = surface;
     self->presenter.swapchain_array[idx] = swapchain;
     self->presenter.semaphore_array[idx] = semaphore;
     self->presenter.image_source_array[idx] = args.image->image;
-    self->presenter.image_count_array[idx] = swapchain_image_count;
-    self->presenter.image_array[idx] = swapchain_image_array;
+    self->presenter.image_array[idx] = images;
     self->presenter.wait_stage_array[idx] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
     self->presenter.result_array[idx] = VK_SUCCESS;
     self->presenter.index_array[idx] = 0;

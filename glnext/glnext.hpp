@@ -96,18 +96,22 @@ struct StagingBufferBinding {
     VkBool32 is_output;
 };
 
+struct SwapChainImages {
+    uint32_t image_count;
+    VkImage image_array[8];
+};
+
 struct Presenter {
     uint32_t surface_count;
-    VkSurfaceKHR * surface_array;
-    VkSwapchainKHR * swapchain_array;
-    VkPipelineStageFlags * wait_stage_array;
-    VkSemaphore * semaphore_array;
-    VkImage * image_source_array;
-    VkImageBlit * image_blit_array;
-    uint32_t * image_count_array;
-    VkImage ** image_array;
-    VkResult * result_array;
-    uint32_t * index_array;
+    VkSurfaceKHR surface_array[64];
+    VkSwapchainKHR swapchain_array[64];
+    VkPipelineStageFlags wait_stage_array[64];
+    VkSemaphore semaphore_array[64];
+    VkImage image_source_array[64];
+    VkImageBlit image_blit_array[64];
+    SwapChainImages image_array[64];
+    VkResult result_array[64];
+    uint32_t index_array[64];
 };
 
 struct ModuleState {
@@ -489,5 +493,4 @@ VkPrimitiveTopology get_topology(PyObject * name);
 ImageMode get_image_mode(PyObject * name);
 Format get_format(PyObject * name);
 
-void presenter_resize(Presenter * presenter);
 void presenter_remove(Presenter * presenter, uint32_t index);

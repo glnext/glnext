@@ -58,7 +58,7 @@ void end_commands_with_present(Instance * self) {
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_QUEUE_FAMILY_IGNORED,
                 VK_QUEUE_FAMILY_IGNORED,
-                self->presenter.image_array[i][self->presenter.index_array[i]],
+                self->presenter.image_array[i].image_array[self->presenter.index_array[i]],
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             };
         }
@@ -82,7 +82,7 @@ void end_commands_with_present(Instance * self) {
             self->command_buffer,
             self->presenter.image_source_array[i],
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            self->presenter.image_array[i][self->presenter.index_array[i]],
+            self->presenter.image_array[i].image_array[self->presenter.index_array[i]],
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1,
             &self->presenter.image_blit_array[i],
@@ -104,7 +104,7 @@ void end_commands_with_present(Instance * self) {
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                 VK_QUEUE_FAMILY_IGNORED,
                 VK_QUEUE_FAMILY_IGNORED,
-                self->presenter.image_array[i][self->presenter.index_array[i]],
+                self->presenter.image_array[i].image_array[self->presenter.index_array[i]],
                 {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             };
         }
@@ -657,26 +657,7 @@ Format get_format(PyObject * name) {
     return {};
 }
 
-template <typename T>
-void realloc_array(T ** array, uint32_t size) {
-    *array = (T *)realloc(*array, sizeof(T) * size);
-}
-
-void presenter_resize(Presenter * self) {
-    realloc_array(&self->surface_array, self->surface_count);
-    realloc_array(&self->swapchain_array, self->surface_count);
-    realloc_array(&self->wait_stage_array, self->surface_count);
-    realloc_array(&self->semaphore_array, self->surface_count);
-    realloc_array(&self->image_source_array, self->surface_count);
-    realloc_array(&self->image_blit_array, self->surface_count);
-    realloc_array(&self->image_count_array, self->surface_count);
-    realloc_array(&self->image_array, self->surface_count);
-    realloc_array(&self->result_array, self->surface_count);
-    realloc_array(&self->index_array, self->surface_count);
-}
-
 void presenter_remove(Presenter * self, uint32_t index) {
-    free(self->image_array[index]);
     self->surface_count -= 1;
     for (uint32_t i = index; i < self->surface_count; ++i) {
         self->surface_array[i] = self->surface_array[i + 1];
@@ -685,10 +666,8 @@ void presenter_remove(Presenter * self, uint32_t index) {
         self->semaphore_array[i] = self->semaphore_array[i + 1];
         self->image_source_array[i] = self->image_source_array[i + 1];
         self->image_blit_array[i] = self->image_blit_array[i + 1];
-        self->image_count_array[i] = self->image_count_array[i + 1];
         self->image_array[i] = self->image_array[i + 1];
         self->result_array[i] = self->result_array[i + 1];
         self->index_array[i] = self->index_array[i + 1];
     }
-    presenter_resize(self);
 }
