@@ -23,7 +23,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         const char * engine_name = NULL;
         uint32_t engine_version = 0;
         const char * backend = NULL;
-        const char * surface = NULL;
+        PyObject * surface = Py_False;
         PyObject * layers = Py_None;
         VkBool32 debug = false;
     } args;
@@ -31,7 +31,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$IzIzIzzOp",
+        "|$IzIzIzOOp",
         keywords,
         &args.physical_device,
         &args.application_name,
@@ -48,8 +48,23 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         return NULL;
     }
 
+    if (!PyBool_Check(args.surface) && !PyUnicode_CheckExact(args.surface)) {
+        PyErr_Format(PyExc_ValueError, "surface");
+        return NULL;
+    }
+
     if (args.layers == Py_None) {
         args.layers = state->empty_list;
+    }
+
+    const char * surface = NULL;
+
+    if (args.surface == Py_True) {
+        surface = DEFAULT_SURFACE;
+    }
+
+    if (PyUnicode_CheckExact(args.surface)) {
+        surface = PyUnicode_AsUTF8(args.surface);
     }
 
     PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = get_instance_proc_addr(args.backend);
@@ -101,10 +116,11 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         instance_layer_array[instance_layer_count++] = PyUnicode_AsUTF8(PyList_GetItem(args.layers, i));
     }
 
-    if (args.surface) {
-        instance_extension_array[instance_extension_count++] = args.surface;
+    if (surface) {
+        instance_extension_array[instance_extension_count++] = surface;
         instance_extension_array[instance_extension_count++] = "VK_KHR_surface";
         device_extension_array[device_extension_count++] = "VK_KHR_swapchain";
+        res->presenter.supported = true;
     }
 
     if (args.debug) {

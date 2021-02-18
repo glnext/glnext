@@ -102,6 +102,7 @@ struct SwapChainImages {
 };
 
 struct Presenter {
+    VkBool32 supported;
     uint32_t surface_count;
     VkSurfaceKHR surface_array[64];
     VkSwapchainKHR swapchain_array[64];
