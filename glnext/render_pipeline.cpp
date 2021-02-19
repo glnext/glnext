@@ -11,6 +11,10 @@ Buffer * get_buffer(Instance * instance, PyObject * obj) {
     return NULL;
 }
 
+const int indirect_mesh_task_stride = 8;
+const int indirect_indexed_stride = 20;
+const int indirect_stride = 16;
+
 void render_mesh_task_indirect_count(RenderPipeline * self, VkCommandBuffer command_buffer) {
     self->instance->vkCmdDrawMeshTasksIndirectCountNV(
         command_buffer,
@@ -19,7 +23,7 @@ void render_mesh_task_indirect_count(RenderPipeline * self, VkCommandBuffer comm
         self->count_buffer->buffer,
         0,
         self->parameters.max_draw_count,
-        8
+        indirect_mesh_task_stride
     );
 }
 
@@ -29,7 +33,7 @@ void render_mesh_task_indirect(RenderPipeline * self, VkCommandBuffer command_bu
         self->indirect_buffer->buffer,
         self->parameters.indirect_buffer_offset,
         self->parameters.instance_count,
-        8
+        indirect_mesh_task_stride
     );
 }
 
@@ -45,7 +49,7 @@ void render_indirect_indexed_count(RenderPipeline * self, VkCommandBuffer comman
         self->count_buffer->buffer,
         self->parameters.count_buffer_offset,
         self->parameters.max_draw_count,
-        20
+        indirect_indexed_stride
     );
 }
 
@@ -57,7 +61,7 @@ void render_indirect_count(RenderPipeline * self, VkCommandBuffer command_buffer
         self->count_buffer->buffer,
         self->parameters.count_buffer_offset,
         self->parameters.max_draw_count,
-        16
+        indirect_stride
     );
 }
 
@@ -67,7 +71,7 @@ void render_indirect_indexed(RenderPipeline * self, VkCommandBuffer command_buff
         self->indirect_buffer->buffer,
         self->parameters.indirect_buffer_offset,
         self->parameters.indirect_count,
-        20
+        indirect_indexed_stride
     );
 }
 
@@ -77,7 +81,7 @@ void render_indirect(RenderPipeline * self, VkCommandBuffer command_buffer) {
         self->indirect_buffer->buffer,
         self->parameters.indirect_buffer_offset,
         self->parameters.indirect_count,
-        16
+        indirect_stride
     );
 }
 
@@ -250,7 +254,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     VkBool32 short_index = false;
     uint32_t index_size = short_index ? 2 : 4;
-    uint32_t indirect_size = args.index_count ? 20 : 16;
 
     res->binding_count = (uint32_t)PyList_Size(args.bindings);
     res->binding_array = (DescriptorBinding *)PyMem_Malloc(sizeof(DescriptorBinding) * PyList_Size(args.bindings));
@@ -266,6 +269,16 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     res->index_buffer = get_buffer(self->instance, args.index_buffer);
     res->indirect_buffer = get_buffer(self->instance, args.indirect_buffer);
     res->count_buffer = get_buffer(self->instance, args.count_buffer);
+
+    uint32_t indirect_size = indirect_stride;
+
+    if (args.index_count || res->index_buffer) {
+        indirect_size = indirect_indexed_stride;
+    }
+
+    if (args.mesh_shader != Py_None) {
+        indirect_size = indirect_mesh_task_stride;
+    }
 
     if (PyErr_Occurred()) {
         return NULL;
