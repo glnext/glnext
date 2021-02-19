@@ -74,6 +74,7 @@ void load_device_methods(Instance * self) {
     load(vkGetImageMemoryRequirements);
     load(vkCmdCopyImageToBuffer);
     load(vkCreateShaderModule);
+    load(vkDestroyShaderModule);
     load(vkCmdCopyBufferToImage);
     load(vkCmdDrawIndirect);
     load(vkCreateImageView);

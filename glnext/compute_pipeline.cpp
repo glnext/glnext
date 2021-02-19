@@ -178,7 +178,8 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
         (uint32_t *)PyBytes_AsString(args.compute_shader),
     };
 
-    self->vkCreateShaderModule(self->device, &compute_shader_module_create_info, NULL, &res->compute_shader_module);
+    VkShaderModule compute_shader_module = NULL;
+    self->vkCreateShaderModule(self->device, &compute_shader_module_create_info, NULL, &compute_shader_module);
 
     VkComputePipelineCreateInfo compute_pipeline_create_info = {
         VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -189,7 +190,7 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
             NULL,
             0,
             VK_SHADER_STAGE_COMPUTE_BIT,
-            res->compute_shader_module,
+            compute_shader_module,
             "main",
             NULL,
         },
@@ -199,6 +200,8 @@ ComputePipeline * new_compute_pipeline(Instance * self, PyObject * vargs, PyObje
     };
 
     self->vkCreateComputePipelines(self->device, NULL, 1, &compute_pipeline_create_info, NULL, &res->pipeline);
+
+    self->vkDestroyShaderModule(self->device, compute_shader_module, NULL);
 
     for (uint32_t i = 0; i < res->binding_count; ++i) {
         if (res->binding_array[i].name) {

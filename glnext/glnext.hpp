@@ -196,6 +196,7 @@ struct Instance {
     PFN_vkGetImageMemoryRequirements vkGetImageMemoryRequirements;
     PFN_vkCmdCopyImageToBuffer vkCmdCopyImageToBuffer;
     PFN_vkCreateShaderModule vkCreateShaderModule;
+    PFN_vkDestroyShaderModule vkDestroyShaderModule;
     PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage;
     PFN_vkCmdDrawIndirect vkCmdDrawIndirect;
     PFN_vkCreateImageView vkCreateImageView;
@@ -344,8 +345,6 @@ struct RenderPipeline {
     VkPipelineLayout pipeline_layout;
     VkDescriptorPool descriptor_pool;
     VkDescriptorSet descriptor_set;
-    VkShaderModule vertex_shader_module;
-    VkShaderModule fragment_shader_module;
     uint32_t attribute_count;
     VkBuffer * attribute_buffer_array;
     VkDeviceSize * attribute_offset_array;
@@ -366,7 +365,6 @@ struct ComputePipeline {
     VkPipelineLayout pipeline_layout;
     VkDescriptorPool descriptor_pool;
     VkDescriptorSet descriptor_set;
-    VkShaderModule compute_shader_module;
     VkPipeline pipeline;
     PyObject * members;
 };
