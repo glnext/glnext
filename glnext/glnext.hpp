@@ -61,6 +61,7 @@ struct RenderParameters {
     uint32_t instance_count;
     uint32_t index_count;
     uint32_t indirect_count;
+    uint32_t max_draw_count;
 };
 
 struct ComputeParameters {
@@ -199,7 +200,6 @@ struct Instance {
     PFN_vkCreateShaderModule vkCreateShaderModule;
     PFN_vkDestroyShaderModule vkDestroyShaderModule;
     PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage;
-    PFN_vkCmdDrawIndirect vkCmdDrawIndirect;
     PFN_vkCreateImageView vkCreateImageView;
     PFN_vkCmdDispatch vkCmdDispatch;
     PFN_vkCmdBindIndexBuffer vkCmdBindIndexBuffer;
@@ -208,7 +208,6 @@ struct Instance {
     PFN_vkCmdSetViewport vkCmdSetViewport;
     PFN_vkCmdBindDescriptorSets vkCmdBindDescriptorSets;
     PFN_vkCmdCopyBuffer vkCmdCopyBuffer;
-    PFN_vkCmdDrawIndexedIndirect vkCmdDrawIndexedIndirect;
     PFN_vkCmdPushConstants vkCmdPushConstants;
     PFN_vkUnmapMemory vkUnmapMemory;
     PFN_vkEndCommandBuffer vkEndCommandBuffer;
@@ -216,7 +215,6 @@ struct Instance {
     PFN_vkDestroyBuffer vkDestroyBuffer;
     PFN_vkUpdateDescriptorSets vkUpdateDescriptorSets;
     PFN_vkCreateRenderPass vkCreateRenderPass;
-    PFN_vkCmdDraw vkCmdDraw;
     PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers;
     PFN_vkAllocateMemory vkAllocateMemory;
     PFN_vkBindBufferMemory vkBindBufferMemory;
@@ -225,7 +223,6 @@ struct Instance {
     PFN_vkCmdBindPipeline vkCmdBindPipeline;
     PFN_vkCreateGraphicsPipelines vkCreateGraphicsPipelines;
     PFN_vkCreateDescriptorSetLayout vkCreateDescriptorSetLayout;
-    PFN_vkCmdDrawIndexed vkCmdDrawIndexed;
     PFN_vkCmdEndRenderPass vkCmdEndRenderPass;
     PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier;
     PFN_vkCreateDescriptorPool vkCreateDescriptorPool;
@@ -245,9 +242,16 @@ struct Instance {
     PFN_vkDestroySemaphore vkDestroySemaphore;
     PFN_vkCmdCopyImage vkCmdCopyImage;
     PFN_vkCmdBlitImage vkCmdBlitImage;
-    PFN_vkCmdDrawMeshTasksIndirectCountNV vkCmdDrawMeshTasksIndirectCountNV;
-    PFN_vkCmdDrawMeshTasksIndirectNV vkCmdDrawMeshTasksIndirectNV;
+
+    PFN_vkCmdDraw vkCmdDraw;
+    PFN_vkCmdDrawIndexed vkCmdDrawIndexed;
+    PFN_vkCmdDrawIndirect vkCmdDrawIndirect;
+    PFN_vkCmdDrawIndexedIndirect vkCmdDrawIndexedIndirect;
+    PFN_vkCmdDrawIndirectCount vkCmdDrawIndirectCount;
+    PFN_vkCmdDrawIndexedIndirectCount vkCmdDrawIndexedIndirectCount;
     PFN_vkCmdDrawMeshTasksNV vkCmdDrawMeshTasksNV;
+    PFN_vkCmdDrawMeshTasksIndirectNV vkCmdDrawMeshTasksIndirectNV;
+    PFN_vkCmdDrawMeshTasksIndirectCountNV vkCmdDrawMeshTasksIndirectCountNV;
 
     PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupportKHR;
     PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormatsKHR;
@@ -341,6 +345,7 @@ struct RenderPipeline {
     Buffer * instance_buffer;
     Buffer * index_buffer;
     Buffer * indirect_buffer;
+    Buffer * count_buffer;
     uint32_t binding_count;
     DescriptorBinding * binding_array;
     VkDescriptorSetLayoutBinding * descriptor_binding_array;

@@ -76,7 +76,6 @@ void load_device_methods(Instance * self) {
     load(vkCreateShaderModule);
     load(vkDestroyShaderModule);
     load(vkCmdCopyBufferToImage);
-    load(vkCmdDrawIndirect);
     load(vkCreateImageView);
     load(vkCmdDispatch);
     load(vkCmdBindIndexBuffer);
@@ -85,7 +84,6 @@ void load_device_methods(Instance * self) {
     load(vkCmdSetViewport);
     load(vkCmdBindDescriptorSets);
     load(vkCmdCopyBuffer);
-    load(vkCmdDrawIndexedIndirect);
     load(vkCmdPushConstants);
     load(vkUnmapMemory);
     load(vkEndCommandBuffer);
@@ -93,7 +91,6 @@ void load_device_methods(Instance * self) {
     load(vkDestroyBuffer);
     load(vkUpdateDescriptorSets);
     load(vkCreateRenderPass);
-    load(vkCmdDraw);
     load(vkCmdBindVertexBuffers);
     load(vkAllocateMemory);
     load(vkBindBufferMemory);
@@ -102,7 +99,6 @@ void load_device_methods(Instance * self) {
     load(vkCmdBindPipeline);
     load(vkCreateGraphicsPipelines);
     load(vkCreateDescriptorSetLayout);
-    load(vkCmdDrawIndexed);
     load(vkCmdEndRenderPass);
     load(vkCmdPipelineBarrier);
     load(vkCreateDescriptorPool);
@@ -122,9 +118,16 @@ void load_device_methods(Instance * self) {
     load(vkDestroySemaphore);
     load(vkCmdCopyImage);
     load(vkCmdBlitImage);
-    load(vkCmdDrawMeshTasksIndirectCountNV);
-    load(vkCmdDrawMeshTasksIndirectNV);
+
+    load(vkCmdDraw);
+    load(vkCmdDrawIndexed);
+    load(vkCmdDrawIndirect);
+    load(vkCmdDrawIndexedIndirect);
+    load(vkCmdDrawIndirectCount);
+    load(vkCmdDrawIndexedIndirectCount);
     load(vkCmdDrawMeshTasksNV);
+    load(vkCmdDrawMeshTasksIndirectNV);
+    load(vkCmdDrawMeshTasksIndirectCountNV);
 
     load(vkAcquireNextImageKHR);
     load(vkQueuePresentKHR);

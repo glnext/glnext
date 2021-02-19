@@ -11,12 +11,48 @@ Buffer * get_buffer(Instance * instance, PyObject * obj) {
     return NULL;
 }
 
+void render_mesh_task_indirect_count(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDrawMeshTasksIndirectCountNV(
+        command_buffer,
+        self->indirect_buffer->buffer,
+        0,
+        self->count_buffer->buffer,
+        0,
+        self->parameters.max_draw_count,
+        8
+    );
+}
+
 void render_mesh_task_indirect(RenderPipeline * self, VkCommandBuffer command_buffer) {
     self->instance->vkCmdDrawMeshTasksIndirectNV(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.instance_count, 8);
 }
 
 void render_mesh_task(RenderPipeline * self, VkCommandBuffer command_buffer) {
     self->instance->vkCmdDrawMeshTasksNV(command_buffer, self->parameters.instance_count, 0);
+}
+
+void render_indirect_indexed_count(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDrawIndexedIndirectCount(
+        command_buffer,
+        self->indirect_buffer->buffer,
+        0,
+        self->count_buffer->buffer,
+        0,
+        self->parameters.max_draw_count,
+        20
+    );
+}
+
+void render_indirect_count(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDrawIndirectCount(
+        command_buffer,
+        self->indirect_buffer->buffer,
+        0,
+        self->count_buffer->buffer,
+        0,
+        self->parameters.max_draw_count,
+        20
+    );
 }
 
 void render_indirect_indexed(RenderPipeline * self, VkCommandBuffer command_buffer) {
@@ -47,10 +83,12 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         "instance_count",
         "index_count",
         "indirect_count",
+        "max_draw_count",
         "vertex_buffer",
         "instance_buffer",
         "index_buffer",
         "indirect_buffer",
+        "count_buffer",
         "topology",
         "bindings",
         "memory",
@@ -68,10 +106,12 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         uint32_t instance_count = 1;
         uint32_t index_count = 0;
         uint32_t indirect_count = 0;
+        uint32_t max_draw_count = 0;
         PyObject * vertex_buffer = Py_None;
         PyObject * instance_buffer = Py_None;
         PyObject * index_buffer = Py_None;
         PyObject * indirect_buffer = Py_None;
+        PyObject * count_buffer = Py_None;
         PyObject * topology;
         PyObject * bindings;
         PyObject * memory = Py_None;
@@ -85,7 +125,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$O!O!O!O!OOIIIIOOOOOOO",
+        "|$O!O!O!O!OOIIIIIOOOOOOOO",
         keywords,
         &PyBytes_Type,
         &args.vertex_shader,
@@ -101,10 +141,12 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         &args.instance_count,
         &args.index_count,
         &args.indirect_count,
+        &args.max_draw_count,
         &args.vertex_buffer,
         &args.instance_buffer,
         &args.index_buffer,
         &args.indirect_buffer,
+        &args.count_buffer,
         &args.topology,
         &args.bindings,
         &args.memory
@@ -127,6 +169,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         args.instance_count,
         args.index_count,
         args.indirect_count,
+        args.max_draw_count,
     };
 
     PyObject * vertex_format = PyUnicode_Split(args.vertex_format, NULL, -1);
@@ -184,6 +227,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     res->instance_buffer = get_buffer(self->instance, args.instance_buffer);
     res->index_buffer = get_buffer(self->instance, args.index_buffer);
     res->indirect_buffer = get_buffer(self->instance, args.indirect_buffer);
+    res->count_buffer = get_buffer(self->instance, args.count_buffer);
 
     if (PyErr_Occurred()) {
         return NULL;
@@ -239,6 +283,10 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     if (res->indirect_buffer) {
         PyDict_SetItemString(res->members, "indirect_buffer", (PyObject *)res->indirect_buffer);
+    }
+
+    if (res->count_buffer) {
+        PyDict_SetItemString(res->members, "count_buffer", (PyObject *)res->count_buffer);
     }
 
     for (uint32_t i = 0; i < res->binding_count; ++i) {
@@ -570,13 +618,19 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     }
 
     if (args.mesh_shader != Py_None) {
-        if (res->indirect_buffer) {
+        if (res->indirect_buffer && res->count_buffer) {
+            res->render_command = render_mesh_task_indirect_count;
+        } else if (res->indirect_buffer) {
             res->render_command = render_mesh_task_indirect;
         } else {
             res->render_command = render_mesh_task;
         }
     } else {
-        if (res->indirect_buffer && res->index_buffer) {
+        if (res->indirect_buffer && res->index_buffer && res->count_buffer) {
+            res->render_command = render_indirect_indexed_count;
+        } else if (res->indirect_buffer && res->count_buffer) {
+            res->render_command = render_indirect_count;
+        } else if (res->indirect_buffer && res->index_buffer) {
             res->render_command = render_indirect_indexed;
         } else if (res->indirect_buffer) {
             res->render_command = render_indirect;
