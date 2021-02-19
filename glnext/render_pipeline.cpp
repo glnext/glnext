@@ -15,6 +15,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     static char * keywords[] = {
         "vertex_shader",
         "fragment_shader",
+        "task_shader",
+        "mesh_shader",
         "vertex_format",
         "instance_format",
         "vertex_count",
@@ -34,6 +36,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     struct {
         PyObject * vertex_shader = Py_None;
         PyObject * fragment_shader = Py_None;
+        PyObject * task_shader = Py_None;
+        PyObject * mesh_shader = Py_None;
         PyObject * vertex_format;
         PyObject * instance_format;
         uint32_t vertex_count = 0;
@@ -57,12 +61,16 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$O!O!OOIIIIOOOOOOO",
+        "|$O!O!O!O!OOIIIIOOOOOOO",
         keywords,
         &PyBytes_Type,
         &args.vertex_shader,
         &PyBytes_Type,
         &args.fragment_shader,
+        &PyBytes_Type,
+        &args.task_shader,
+        &PyBytes_Type,
+        &args.mesh_shader,
         &args.vertex_format,
         &args.instance_format,
         &args.vertex_count,
@@ -329,30 +337,22 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     self->instance->vkCreatePipelineLayout(self->instance->device, &pipeline_layout_create_info, NULL, &res->pipeline_layout);
 
-    VkShaderModuleCreateInfo vertex_shader_module_create_info = {
-        VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        NULL,
-        0,
-        (VkDeviceSize)PyBytes_Size(args.vertex_shader),
-        (uint32_t *)PyBytes_AsString(args.vertex_shader),
-    };
+    uint32_t pipeline_shader_stage_count = 0;
+    VkPipelineShaderStageCreateInfo pipeline_shader_stage_array[8] = {};
 
-    VkShaderModule vertex_shader_module = NULL;
-    self->instance->vkCreateShaderModule(self->instance->device, &vertex_shader_module_create_info, NULL, &vertex_shader_module);
+    if (args.vertex_shader != Py_None) {
+        VkShaderModuleCreateInfo vertex_shader_module_create_info = {
+            VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            NULL,
+            0,
+            (VkDeviceSize)PyBytes_Size(args.vertex_shader),
+            (uint32_t *)PyBytes_AsString(args.vertex_shader),
+        };
 
-    VkShaderModuleCreateInfo fragment_shader_module_create_info = {
-        VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        NULL,
-        0,
-        (VkDeviceSize)PyBytes_Size(args.fragment_shader),
-        (uint32_t *)PyBytes_AsString(args.fragment_shader),
-    };
+        VkShaderModule vertex_shader_module = NULL;
+        self->instance->vkCreateShaderModule(self->instance->device, &vertex_shader_module_create_info, NULL, &vertex_shader_module);
 
-    VkShaderModule fragment_shader_module = NULL;
-    self->instance->vkCreateShaderModule(self->instance->device, &fragment_shader_module_create_info, NULL, &fragment_shader_module);
-
-    VkPipelineShaderStageCreateInfo pipeline_shader_stage_array[] = {
-        {
+        pipeline_shader_stage_array[pipeline_shader_stage_count++] = {
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             NULL,
             0,
@@ -360,8 +360,22 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
             vertex_shader_module,
             "main",
             NULL,
-        },
-        {
+        };
+    }
+
+    if (args.fragment_shader != Py_None) {
+        VkShaderModuleCreateInfo fragment_shader_module_create_info = {
+            VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            NULL,
+            0,
+            (VkDeviceSize)PyBytes_Size(args.fragment_shader),
+            (uint32_t *)PyBytes_AsString(args.fragment_shader),
+        };
+
+        VkShaderModule fragment_shader_module = NULL;
+        self->instance->vkCreateShaderModule(self->instance->device, &fragment_shader_module_create_info, NULL, &fragment_shader_module);
+
+        pipeline_shader_stage_array[pipeline_shader_stage_count++] = {
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             NULL,
             0,
@@ -369,8 +383,31 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
             fragment_shader_module,
             "main",
             NULL,
-        },
-    };
+        };
+    }
+
+    if (args.mesh_shader != Py_None) {
+        VkShaderModuleCreateInfo mesh_shader_module_create_info = {
+            VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            NULL,
+            0,
+            (VkDeviceSize)PyBytes_Size(args.mesh_shader),
+            (uint32_t *)PyBytes_AsString(args.mesh_shader),
+        };
+
+        VkShaderModule mesh_shader_module = NULL;
+        self->instance->vkCreateShaderModule(self->instance->device, &mesh_shader_module_create_info, NULL, &mesh_shader_module);
+
+        pipeline_shader_stage_array[pipeline_shader_stage_count++] = {
+            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            NULL,
+            0,
+            VK_SHADER_STAGE_MESH_BIT_NV,
+            mesh_shader_module,
+            "main",
+            NULL,
+        };
+    }
 
     VkPipelineVertexInputStateCreateInfo pipeline_vertex_input_state = {
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -484,7 +521,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         NULL,
         0,
-        2,
+        pipeline_shader_stage_count,
         pipeline_shader_stage_array,
         &pipeline_vertex_input_state,
         &pipeline_input_assembly_state,
@@ -504,8 +541,9 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     self->instance->vkCreateGraphicsPipelines(self->instance->device, NULL, 1, &graphics_pipeline_create_info, NULL, &res->pipeline);
 
-    self->instance->vkDestroyShaderModule(self->instance->device, vertex_shader_module, NULL);
-    self->instance->vkDestroyShaderModule(self->instance->device, fragment_shader_module, NULL);
+    for (uint32_t i = 0; i < pipeline_shader_stage_count; ++i) {
+        self->instance->vkDestroyShaderModule(self->instance->device, pipeline_shader_stage_array[i].module, NULL);
+    }
 
     for (uint32_t i = 0; i < res->binding_count; ++i) {
         if (res->binding_array[i].name) {

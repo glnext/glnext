@@ -284,9 +284,22 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     }
     free(device_extension_array);
 
+    VkPhysicalDeviceMeshShaderFeaturesNV mesh_shader_features = {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV,
+        NULL,
+        true,
+        true,
+    };
+
+    void * device_create_info_next = NULL;
+
+    if (res->mesh_shader) {
+        device_create_info_next = &mesh_shader_features;
+    }
+
     VkDeviceCreateInfo device_create_info = {
         VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        NULL,
+        device_create_info_next,
         0,
         1,
         &device_queue_create_info,
