@@ -89,6 +89,14 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     res->instance = self->instance;
     res->members = PyDict_New();
 
+    res->parameters = {
+        true,
+        args.vertex_count,
+        args.instance_count,
+        args.index_count,
+        args.indirect_count,
+    };
+
     PyObject * vertex_format = PyUnicode_Split(args.vertex_format, NULL, -1);
     PyObject * instance_format = PyUnicode_Split(args.instance_format, NULL, -1);
 
@@ -126,14 +134,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     for (uint32_t i = vertex_attribute_count; i < attribute_count; ++i) {
         binding_array[i] = {i, istride, VK_VERTEX_INPUT_RATE_INSTANCE};
     }
-
-    res->parameters = {
-        true,
-        args.vertex_count,
-        args.instance_count,
-        args.index_count,
-        args.indirect_count,
-    };
 
     VkBool32 short_index = false;
     uint32_t index_size = short_index ? 2 : 4;
