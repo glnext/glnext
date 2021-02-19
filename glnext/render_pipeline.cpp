@@ -11,6 +11,30 @@ Buffer * get_buffer(Instance * instance, PyObject * obj) {
     return NULL;
 }
 
+void render_mesh_task_indirect(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDrawMeshTasksIndirectNV(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.instance_count, 8);
+}
+
+void render_mesh_task(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDrawMeshTasksNV(command_buffer, self->parameters.instance_count, 0);
+}
+
+void render_indirect_indexed(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDrawIndexedIndirect(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 20);
+}
+
+void render_indirect(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDrawIndirect(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 16);
+}
+
+void render_indexed(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDrawIndexed(command_buffer, self->parameters.index_count, self->parameters.instance_count, 0, 0, 0);
+}
+
+void render_simple(RenderPipeline * self, VkCommandBuffer command_buffer) {
+    self->instance->vkCmdDraw(command_buffer, self->parameters.vertex_count, self->parameters.instance_count, 0, 0);
+}
+
 RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "vertex_shader",
@@ -545,6 +569,24 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         self->instance->vkDestroyShaderModule(self->instance->device, pipeline_shader_stage_array[i].module, NULL);
     }
 
+    if (args.mesh_shader != Py_None) {
+        if (res->indirect_buffer) {
+            res->render_command = render_mesh_task_indirect;
+        } else {
+            res->render_command = render_mesh_task;
+        }
+    } else {
+        if (res->indirect_buffer && res->index_buffer) {
+            res->render_command = render_indirect_indexed;
+        } else if (res->indirect_buffer) {
+            res->render_command = render_indirect;
+        } else if (res->index_buffer) {
+            res->render_command = render_indexed;
+        } else {
+            res->render_command = render_simple;
+        }
+    }
+
     for (uint32_t i = 0; i < res->binding_count; ++i) {
         if (res->binding_array[i].name) {
             if (res->binding_array[i].is_buffer) {
@@ -648,15 +690,7 @@ void execute_render_pipeline(RenderPipeline * self, VkCommandBuffer command_buff
         );
     }
 
-    if (self->indirect_buffer && self->index_buffer) {
-        self->instance->vkCmdDrawIndexedIndirect(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 20);
-    } else if (self->indirect_buffer) {
-        self->instance->vkCmdDrawIndirect(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 16);
-    } else if (self->index_buffer) {
-        self->instance->vkCmdDrawIndexed(command_buffer, self->parameters.index_count, self->parameters.instance_count, 0, 0, 0);
-    } else {
-        self->instance->vkCmdDraw(command_buffer, self->parameters.vertex_count, self->parameters.instance_count, 0, 0);
-    }
+    self->render_command(self, command_buffer);
 }
 
 PyObject * RenderPipeline_subscript(RenderPipeline * self, PyObject * key) {

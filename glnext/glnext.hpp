@@ -68,6 +68,7 @@ struct ComputeParameters {
     uint32_t x, y, z;
 };
 
+typedef void (* RenderCommand)(RenderPipeline * self, VkCommandBuffer command_buffer);
 typedef void (* Packer)(char * ptr, PyObject ** obj);
 
 struct Format {
@@ -244,6 +245,9 @@ struct Instance {
     PFN_vkDestroySemaphore vkDestroySemaphore;
     PFN_vkCmdCopyImage vkCmdCopyImage;
     PFN_vkCmdBlitImage vkCmdBlitImage;
+    PFN_vkCmdDrawMeshTasksIndirectCountNV vkCmdDrawMeshTasksIndirectCountNV;
+    PFN_vkCmdDrawMeshTasksIndirectNV vkCmdDrawMeshTasksIndirectNV;
+    PFN_vkCmdDrawMeshTasksNV vkCmdDrawMeshTasksNV;
 
     PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupportKHR;
     PFN_vkGetPhysicalDeviceSurfaceFormatsKHR vkGetPhysicalDeviceSurfaceFormatsKHR;
@@ -332,6 +336,7 @@ struct RenderPipeline {
     PyObject_HEAD
     Instance * instance;
     RenderParameters parameters;
+    RenderCommand render_command;
     Buffer * vertex_buffer;
     Buffer * instance_buffer;
     Buffer * index_buffer;

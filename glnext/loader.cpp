@@ -122,6 +122,9 @@ void load_device_methods(Instance * self) {
     load(vkDestroySemaphore);
     load(vkCmdCopyImage);
     load(vkCmdBlitImage);
+    load(vkCmdDrawMeshTasksIndirectCountNV);
+    load(vkCmdDrawMeshTasksIndirectNV);
+    load(vkCmdDrawMeshTasksNV);
 
     load(vkAcquireNextImageKHR);
     load(vkQueuePresentKHR);

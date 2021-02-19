@@ -12,8 +12,8 @@ pipeline = framebuffer.render(
         #pragma shader_stage(mesh)
         #extension GL_NV_mesh_shader : require
 
-        layout (local_size_x=1) in;
-        layout (max_vertices=4, max_primitives=2) out;
+        layout (local_size_x = 1) in;
+        layout (max_vertices = 4, max_primitives = 2) out;
         layout (triangles) out;
 
         void main() {
@@ -40,7 +40,6 @@ pipeline = framebuffer.render(
             out_color = vec4(1.0, 1.0, 1.0, 1.0);
         }
     '''),
-    vertex_count=3,
 )
 
 instance.run()
