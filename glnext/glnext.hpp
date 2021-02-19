@@ -62,6 +62,11 @@ struct RenderParameters {
     uint32_t index_count;
     uint32_t indirect_count;
     uint32_t max_draw_count;
+    VkDeviceSize vertex_buffer_offset;
+    VkDeviceSize instance_buffer_offset;
+    VkDeviceSize index_buffer_offset;
+    VkDeviceSize indirect_buffer_offset;
+    VkDeviceSize count_buffer_offset;
 };
 
 struct ComputeParameters {

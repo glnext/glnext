@@ -24,7 +24,13 @@ void render_mesh_task_indirect_count(RenderPipeline * self, VkCommandBuffer comm
 }
 
 void render_mesh_task_indirect(RenderPipeline * self, VkCommandBuffer command_buffer) {
-    self->instance->vkCmdDrawMeshTasksIndirectNV(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.instance_count, 8);
+    self->instance->vkCmdDrawMeshTasksIndirectNV(
+        command_buffer,
+        self->indirect_buffer->buffer,
+        self->parameters.indirect_buffer_offset,
+        self->parameters.instance_count,
+        8
+    );
 }
 
 void render_mesh_task(RenderPipeline * self, VkCommandBuffer command_buffer) {
@@ -35,9 +41,9 @@ void render_indirect_indexed_count(RenderPipeline * self, VkCommandBuffer comman
     self->instance->vkCmdDrawIndexedIndirectCount(
         command_buffer,
         self->indirect_buffer->buffer,
-        0,
+        self->parameters.indirect_buffer_offset,
         self->count_buffer->buffer,
-        0,
+        self->parameters.count_buffer_offset,
         self->parameters.max_draw_count,
         20
     );
@@ -47,20 +53,32 @@ void render_indirect_count(RenderPipeline * self, VkCommandBuffer command_buffer
     self->instance->vkCmdDrawIndirectCount(
         command_buffer,
         self->indirect_buffer->buffer,
-        0,
+        self->parameters.indirect_buffer_offset,
         self->count_buffer->buffer,
-        0,
+        self->parameters.count_buffer_offset,
         self->parameters.max_draw_count,
-        20
+        16
     );
 }
 
 void render_indirect_indexed(RenderPipeline * self, VkCommandBuffer command_buffer) {
-    self->instance->vkCmdDrawIndexedIndirect(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 20);
+    self->instance->vkCmdDrawIndexedIndirect(
+        command_buffer,
+        self->indirect_buffer->buffer,
+        self->parameters.indirect_buffer_offset,
+        self->parameters.indirect_count,
+        20
+    );
 }
 
 void render_indirect(RenderPipeline * self, VkCommandBuffer command_buffer) {
-    self->instance->vkCmdDrawIndirect(command_buffer, self->indirect_buffer->buffer, 0, self->parameters.indirect_count, 16);
+    self->instance->vkCmdDrawIndirect(
+        command_buffer,
+        self->indirect_buffer->buffer,
+        self->parameters.indirect_buffer_offset,
+        self->parameters.indirect_count,
+        16
+    );
 }
 
 void render_indexed(RenderPipeline * self, VkCommandBuffer command_buffer) {
@@ -89,6 +107,11 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         "index_buffer",
         "indirect_buffer",
         "count_buffer",
+        "vertex_buffer_offset",
+        "instance_buffer_offset",
+        "index_buffer_offset",
+        "indirect_buffer_offset",
+        "count_buffer_offset",
         "topology",
         "bindings",
         "memory",
@@ -112,6 +135,11 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         PyObject * index_buffer = Py_None;
         PyObject * indirect_buffer = Py_None;
         PyObject * count_buffer = Py_None;
+        VkDeviceSize vertex_buffer_offset = 0;
+        VkDeviceSize instance_buffer_offset = 0;
+        VkDeviceSize index_buffer_offset = 0;
+        VkDeviceSize indirect_buffer_offset = 0;
+        VkDeviceSize count_buffer_offset = 0;
         PyObject * topology;
         PyObject * bindings;
         PyObject * memory = Py_None;
@@ -125,7 +153,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$O!O!O!O!OOIIIIIOOOOOOOO",
+        "|$O!O!O!O!OOIIIIIOOOOOKKKKKOOO",
         keywords,
         &PyBytes_Type,
         &args.vertex_shader,
@@ -147,6 +175,11 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         &args.index_buffer,
         &args.indirect_buffer,
         &args.count_buffer,
+        &args.vertex_buffer_offset,
+        &args.instance_buffer_offset,
+        &args.index_buffer_offset,
+        &args.indirect_buffer_offset,
+        &args.count_buffer_offset,
         &args.topology,
         &args.bindings,
         &args.memory
@@ -170,6 +203,11 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         args.index_count,
         args.indirect_count,
         args.max_draw_count,
+        args.vertex_buffer_offset,
+        args.instance_buffer_offset,
+        args.index_buffer_offset,
+        args.indirect_buffer_offset,
+        args.count_buffer_offset,
     };
 
     PyObject * vertex_format = PyUnicode_Split(args.vertex_format, NULL, -1);
@@ -321,12 +359,12 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     for (uint32_t i = 0; i < vertex_attribute_count; ++i) {
         res->attribute_buffer_array[i] = res->vertex_buffer->buffer;
-        res->attribute_offset_array[i] = 0;
+        res->attribute_offset_array[i] = args.vertex_buffer_offset;
     }
 
     for (uint32_t i = vertex_attribute_count; i < attribute_count; ++i) {
         res->attribute_buffer_array[i] = res->instance_buffer->buffer;
-        res->attribute_offset_array[i] = 0;
+        res->attribute_offset_array[i] = args.instance_buffer_offset;
     }
 
     res->descriptor_binding_array = (VkDescriptorSetLayoutBinding *)PyMem_Malloc(sizeof(VkDescriptorSetLayoutBinding) * res->binding_count);
@@ -739,7 +777,7 @@ void execute_render_pipeline(RenderPipeline * self, VkCommandBuffer command_buff
         self->instance->vkCmdBindIndexBuffer(
             command_buffer,
             self->index_buffer->buffer,
-            0,
+            self->parameters.index_buffer_offset,
             VK_INDEX_TYPE_UINT32
         );
     }
