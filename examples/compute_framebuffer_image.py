@@ -20,7 +20,7 @@ compute = framebuffer.compute(
             imageStore(Result, ivec2(gl_GlobalInvocationID.xy), vec4(color, 1.0));
         }
     '''),
-    images=[
+    bindings=[
         {
             'binding': 0,
             'type': 'storage_image',
