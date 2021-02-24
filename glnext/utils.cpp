@@ -147,6 +147,10 @@ Image * new_image(ImageCreateInfo info) {
         flags = VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
     }
 
+    if (info.layers % 6 == 0) {
+        flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
+
     VkImageCreateInfo image_info = {
         VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         NULL,
