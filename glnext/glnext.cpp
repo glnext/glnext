@@ -33,6 +33,7 @@ PyMethodDef Instance_methods[] = {
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
     {"staging", (PyCFunction)Instance_meth_staging, METH_VARARGS | METH_KEYWORDS, NULL},
     {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"cache", (PyCFunction)Instance_meth_cache, METH_NOARGS, NULL},
     {"run", (PyCFunction)Instance_meth_run, METH_NOARGS, NULL},
     {},
 };

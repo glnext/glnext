@@ -646,7 +646,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         dynamic_state_array,
     };
 
-    VkGraphicsPipelineCreateInfo graphics_pipeline_create_info = {
+    VkGraphicsPipelineCreateInfo pipeline_create_info = {
         VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         NULL,
         0,
@@ -668,7 +668,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         0,
     };
 
-    self->instance->vkCreateGraphicsPipelines(self->instance->device, NULL, 1, &graphics_pipeline_create_info, NULL, &res->pipeline);
+    self->instance->vkCreateGraphicsPipelines(self->instance->device, self->instance->pipeline_cache, 1, &pipeline_create_info, NULL, &res->pipeline);
 
     for (uint32_t i = 0; i < pipeline_shader_stage_count; ++i) {
         self->instance->vkDestroyShaderModule(self->instance->device, pipeline_shader_stage_array[i].module, NULL);

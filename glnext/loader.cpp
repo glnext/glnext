@@ -95,6 +95,8 @@ void load_device_methods(Instance * self) {
     load(vkAllocateMemory);
     load(vkBindBufferMemory);
     load(vkCreatePipelineLayout);
+    load(vkCreatePipelineCache);
+    load(vkGetPipelineCacheData);
     load(vkCmdSetScissor);
     load(vkCmdBindPipeline);
     load(vkCreateGraphicsPipelines);

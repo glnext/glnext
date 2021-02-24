@@ -12,6 +12,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         "backend",
         "surface",
         "layers",
+        "cache",
         "debug",
         NULL,
     };
@@ -25,13 +26,14 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         const char * backend = NULL;
         PyObject * surface = Py_False;
         PyObject * layers = Py_None;
+        PyObject * cache = Py_None;
         VkBool32 debug = false;
     } args;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$IzIzIzOOp",
+        "|$IzIzIzOOOp",
         keywords,
         &args.physical_device,
         &args.application_name,
@@ -41,6 +43,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         &args.backend,
         &args.surface,
         &args.layers,
+        &args.cache,
         &args.debug
     );
 
@@ -85,9 +88,11 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->physical_device = NULL;
     res->device = NULL;
     res->queue = NULL;
+    res->fence = NULL;
     res->command_pool = NULL;
     res->command_buffer = NULL;
-    res->fence = NULL;
+    res->pipeline_cache = NULL;
+    res->debug_messenger = NULL;
 
     res->validation_layer = false;
     res->debug_utils = false;
@@ -343,6 +348,29 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 
     res->vkAllocateCommandBuffers(res->device, &command_buffer_allocate_info, &res->command_buffer);
 
+    if (PyBytes_CheckExact(args.cache)) {
+        VkPipelineCacheCreateInfo pipeline_cache_create_info = {
+            VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+            NULL,
+            0,
+            (size_t)PyBytes_Size(args.cache),
+            PyBytes_AsString(args.cache),
+        };
+        res->vkCreatePipelineCache(res->device, &pipeline_cache_create_info, NULL, &res->pipeline_cache);
+    }
+
+    return res;
+}
+
+PyObject * Instance_meth_cache(Instance * self) {
+    if (!self->pipeline_cache) {
+        PyErr_Format(PyExc_ValueError, "cache not enabled");
+        return NULL;
+    }
+    size_t size = 0;
+    self->vkGetPipelineCacheData(self->device, self->pipeline_cache, &size, NULL);
+    PyObject * res = PyBytes_FromStringAndSize(NULL, size);
+    self->vkGetPipelineCacheData(self->device, self->pipeline_cache, &size, PyBytes_AsString(res));
     return res;
 }
 

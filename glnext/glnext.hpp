@@ -159,6 +159,7 @@ struct Instance {
     VkCommandPool command_pool;
     VkCommandBuffer command_buffer;
 
+    VkPipelineCache pipeline_cache;
     VkDebugUtilsMessengerEXT debug_messenger;
 
     uint32_t queue_family_index;
@@ -224,6 +225,8 @@ struct Instance {
     PFN_vkAllocateMemory vkAllocateMemory;
     PFN_vkBindBufferMemory vkBindBufferMemory;
     PFN_vkCreatePipelineLayout vkCreatePipelineLayout;
+    PFN_vkCreatePipelineCache vkCreatePipelineCache;
+    PFN_vkGetPipelineCacheData vkGetPipelineCacheData;
     PFN_vkCmdSetScissor vkCmdSetScissor;
     PFN_vkCmdBindPipeline vkCmdBindPipeline;
     PFN_vkCreateGraphicsPipelines vkCreateGraphicsPipelines;
