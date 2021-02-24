@@ -117,6 +117,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         "indirect_buffer_offset",
         "count_buffer_offset",
         "topology",
+        "depth_test",
+        "depth_write",
         "bindings",
         "memory",
         NULL,
@@ -145,6 +147,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         VkDeviceSize indirect_buffer_offset = 0;
         VkDeviceSize count_buffer_offset = 0;
         PyObject * topology;
+        VkBool32 depth_test = true;
+        VkBool32 depth_write = true;
         PyObject * bindings;
         PyObject * memory = Py_None;
     } args;
@@ -157,7 +161,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$O!O!O!O!OOIIIIIOOOOOKKKKKOOO",
+        "|$O!O!O!O!OOIIIIIOOOOOKKKKKOppOO",
         keywords,
         &PyBytes_Type,
         &args.vertex_shader,
@@ -185,6 +189,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         &args.indirect_buffer_offset,
         &args.count_buffer_offset,
         &args.topology,
+        &args.depth_test,
+        &args.depth_write,
         &args.bindings,
         &args.memory
     );
@@ -592,8 +598,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         NULL,
         0,
-        true,
-        true,
+        args.depth_test,
+        args.depth_write,
         VK_COMPARE_OP_LESS,
         false,
         false,
