@@ -249,7 +249,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     physical_device_features.samplerAnisotropy = supported_features.samplerAnisotropy;
 
     const char * device_extension_array[64];
-    uint32_t device_extension_count = load_device_extensions(res, device_extension_array, &device_extension_count);
+    uint32_t device_extension_count = load_device_extensions(res, device_extension_array);
 
     VkPhysicalDeviceMeshShaderFeaturesNV mesh_shader_features = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV,
