@@ -44,4 +44,4 @@ pipeline = framebuffer.render(
 
 instance.run()
 data = framebuffer.output[0].read()
-Image.frombuffer('RGB', (512, 512), data, 'raw', 'RGBX', 0, -1).show()
+Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()

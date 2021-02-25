@@ -40,5 +40,5 @@ instance.run()
 data1 = framebuffer.output[0].read()
 data2 = framebuffer.output[1].read()
 
-Image.frombuffer('RGB', (512, 512), data1, 'raw', 'BGRX', 0, -1).show()
-Image.frombuffer('RGB', (512, 512), data2, 'raw', 'BGRX', 0, -1).show()
+Image.frombuffer('RGBA', (512, 512), data1, 'raw', 'RGBA', 0, -1).show()
+Image.frombuffer('RGBA', (512, 512), data2, 'raw', 'RGBA', 0, -1).show()

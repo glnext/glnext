@@ -44,4 +44,4 @@ pipeline['vertex_buffer'].write(glnext.pack([
 
 instance.run()
 data = framebuffer.output[0].read()
-Image.frombuffer('RGB', (512, 512), data, 'raw', 'BGRX', 0, -1).show()
+Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()
