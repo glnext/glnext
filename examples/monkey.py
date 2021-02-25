@@ -43,9 +43,8 @@ pipeline = framebuffer.render(
         layout (location = 0) out vec4 out_color;
 
         void main() {
-            vec3 color = vec3(1.0, 1.0, 1.0);
-            vec3 sight = -vec3(mvp[0].w, mvp[1].w, mvp[2].w);
-            float lum = dot(normalize(sight), normalize(in_norm)) * 0.7 + 0.3;
+            vec3 light = vec3(4.0, 3.0, 10.0);
+            float lum = dot(normalize(light), normalize(in_norm)) * 0.7 + 0.3;
             out_color = vec4(lum, lum, lum, 1.0);
         }
     '''),
