@@ -145,6 +145,17 @@ struct ModuleState {
     PyObject * output_str;
 };
 
+struct Extension {
+    VkBool32 acceleration_structure;
+    VkBool32 dedicated_allocation;
+    VkBool32 deferred_host_operations;
+    VkBool32 draw_indirect_count;
+    VkBool32 mesh_shader;
+    VkBool32 pipeline_library;
+    VkBool32 ray_query;
+    VkBool32 ray_tracing_pipeline;
+};
+
 struct Instance {
     PyObject_HEAD
 
@@ -160,16 +171,13 @@ struct Instance {
     VkPipelineCache pipeline_cache;
     VkDebugUtilsMessengerEXT debug_messenger;
 
+    uint32_t api_version;
     uint32_t queue_family_index;
     uint32_t host_memory_type_index;
     uint32_t device_memory_type_index;
     VkFormat depth_format;
 
-    VkBool32 validation_layer;
-    VkBool32 debug_utils;
-    VkBool32 dedicated_allocation;
-    VkBool32 mesh_shader;
-
+    Extension extension;
     Presenter presenter;
 
     PyObject * task_list;
@@ -182,6 +190,7 @@ struct Instance {
     ModuleState * state;
 
     PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+    PFN_vkEnumerateInstanceVersion vkEnumerateInstanceVersion;
     PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
     PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties;
     PFN_vkCreateInstance vkCreateInstance;
@@ -472,12 +481,22 @@ T * allocate(uint32_t count) {
     return (T *)PyMem_Malloc(sizeof(T) * count);
 }
 
+inline bool has_key(PyObject * dict, const char * key) {
+    return !!PyDict_GetItemString(dict, key);
+}
+
 PyObject * Buffer_meth_write(Buffer * self, PyObject * arg);
 
 PFN_vkGetInstanceProcAddr get_instance_proc_addr(const char * backend);
+
 void load_library_methods(Instance * instance);
 void load_instance_methods(Instance * instance);
 void load_device_methods(Instance * instance);
+
+PyObject * get_instance_layers(PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties);
+PyObject * get_instance_extensions(PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties);
+PyObject * get_device_extensions(VkPhysicalDevice physical_device, PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties);
+uint32_t load_device_extensions(Instance * instance, const char ** array);
 
 void install_debug_messenger(Instance * instance);
 

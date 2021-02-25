@@ -38,6 +38,7 @@ glnext = Extension(
         'glnext/buffer.cpp',
         'glnext/compute_pipeline.cpp',
         'glnext/debug.cpp',
+        'glnext/extension.cpp',
         'glnext/framebuffer.cpp',
         'glnext/glnext.hpp',
         'glnext/image.cpp',

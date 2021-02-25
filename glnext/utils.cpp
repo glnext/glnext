@@ -174,7 +174,7 @@ Image * new_image(ImageCreateInfo info) {
     VkMemoryRequirements requirements = {};
     info.instance->vkGetImageMemoryRequirements(info.instance->device, res->image, &requirements);
 
-    if (info.instance->dedicated_allocation && info.mode == IMG_PROTECTED) {
+    if (info.instance->extension.dedicated_allocation && info.mode == IMG_PROTECTED) {
         VkMemoryDedicatedAllocateInfo dedicated_info = {
             VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
             NULL,

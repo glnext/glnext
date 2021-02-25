@@ -64,10 +64,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 
     if (args.surface == Py_True) {
         surface = getenv("GLNEXT_SURFACE");
-
-        if (!surface) {
-            surface = DEFAULT_SURFACE;
-        }
+        surface = surface ? surface : DEFAULT_SURFACE;
     }
 
     if (PyUnicode_CheckExact(args.surface)) {
@@ -94,12 +91,9 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->pipeline_cache = NULL;
     res->debug_messenger = NULL;
 
-    res->validation_layer = false;
-    res->debug_utils = false;
-    res->dedicated_allocation = false;
-    res->mesh_shader = false;
-
+    res->extension = {};
     res->presenter = {};
+    res->presenter.supported = !!surface;
 
     res->task_list = PyList_New(0);
     res->staging_list = PyList_New(0);
@@ -108,6 +102,46 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->image_list = PyList_New(0);
     res->log_list = PyList_New(0);
 
+    res->vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    load_library_methods(res);
+
+    res->api_version = VK_API_VERSION_1_0;
+
+    if (res->vkEnumerateInstanceVersion) {
+        res->vkEnumerateInstanceVersion(&res->api_version);
+    }
+
+    uint32_t layer_count = 0;
+    uint32_t extension_count = 0;
+
+    const char * layer_array[64];
+    const char * extension_array[64];
+
+    for (uint32_t i = 0; i < PyList_Size(args.layers); ++i) {
+        layer_array[layer_count++] = PyUnicode_AsUTF8(PyList_GetItem(args.layers, i));
+    }
+
+    if (surface) {
+        extension_array[extension_count++] = "VK_KHR_surface";
+        extension_array[extension_count++] = surface;
+    }
+
+    PyObject * layers = get_instance_layers(res->vkEnumerateInstanceLayerProperties);
+    PyObject * extensions = get_instance_extensions(res->vkEnumerateInstanceExtensionProperties);
+
+    if (args.debug) {
+        layer_array[layer_count++] = "VK_LAYER_KHRONOS_validation";
+        extension_array[extension_count++] = "VK_EXT_debug_utils";
+    }
+
+    if (!args.debug && getenv("GLNEXT_VALIDATION") && has_key(layers, "VK_LAYER_KHRONOS_validation")) {
+        layer_array[layer_count++] = "VK_LAYER_KHRONOS_validation";
+    }
+
+    if (res->api_version < VK_API_VERSION_1_1 && has_key(extensions, "VK_KHR_get_physical_device_properties2")) {
+        extension_array[extension_count++] = "VK_KHR_get_physical_device_properties2";
+    }
+
     VkApplicationInfo application_info = {
         VK_STRUCTURE_TYPE_APPLICATION_INFO,
         NULL,
@@ -115,76 +149,18 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         args.application_version,
         args.engine_name,
         args.engine_version,
-        VK_API_VERSION_1_0,
+        res->api_version,
     };
-
-    uint32_t enabled_instance_layer_count = 0;
-    uint32_t enabled_instance_extension_count = 0;
-    uint32_t enabled_device_extension_count = 0;
-
-    const char * enabled_instance_layer_array[64];
-    const char * enabled_instance_extension_array[8];
-    const char * enabled_device_extension_array[8];
-
-    for (uint32_t i = 0; i < PyList_Size(args.layers); ++i) {
-        enabled_instance_layer_array[enabled_instance_layer_count++] = PyUnicode_AsUTF8(PyList_GetItem(args.layers, i));
-    }
-
-    if (surface) {
-        enabled_instance_extension_array[enabled_instance_extension_count++] = surface;
-        enabled_instance_extension_array[enabled_instance_extension_count++] = "VK_KHR_surface";
-        enabled_device_extension_array[enabled_device_extension_count++] = "VK_KHR_swapchain";
-        res->presenter.supported = true;
-    }
-
-    res->vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-    load_library_methods(res);
-
-    uint32_t instance_layer_count = 0;
-    res->vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
-    VkLayerProperties * instance_layer_array = allocate<VkLayerProperties>(instance_layer_count);
-    res->vkEnumerateInstanceLayerProperties(&instance_layer_count, instance_layer_array);
-    for (uint32_t i = 0; i < instance_layer_count; ++i) {
-        if (!strcmp(instance_layer_array[i].layerName, "VK_LAYER_KHRONOS_validation")) {
-            if (args.debug || getenv("GLNEXT_VALIDATION")) {
-                enabled_instance_layer_array[enabled_instance_layer_count++] = "VK_LAYER_KHRONOS_validation";
-                res->validation_layer = true;
-            }
-        }
-    }
-    free(instance_layer_array);
-
-    uint32_t instance_extension_count = 0;
-    res->vkEnumerateInstanceExtensionProperties(NULL, &instance_extension_count, NULL);
-    VkExtensionProperties * instance_extension_array = allocate<VkExtensionProperties>(instance_extension_count);
-    res->vkEnumerateInstanceExtensionProperties(NULL, &instance_extension_count, instance_extension_array);
-    for (uint32_t i = 0; i < instance_extension_count; ++i) {
-        if (!strcmp(instance_extension_array[i].extensionName, "VK_KHR_get_physical_device_properties2")) {
-            enabled_instance_extension_array[enabled_instance_extension_count++] = "VK_KHR_get_physical_device_properties2";
-        }
-        if (!strcmp(instance_extension_array[i].extensionName, "VK_EXT_debug_utils")) {
-            if (args.debug) {
-                enabled_instance_extension_array[enabled_instance_extension_count++] = "VK_EXT_debug_utils";
-                res->debug_utils = true;
-            }
-        }
-    }
-    free(instance_extension_array);
-
-    if (args.debug && !(res->validation_layer && res->debug_utils)) {
-        PyErr_Format(PyExc_RuntimeError, "debug not supported");
-        return NULL;
-    }
 
     VkInstanceCreateInfo instance_create_info = {
         VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         NULL,
         0,
         &application_info,
-        enabled_instance_layer_count,
-        enabled_instance_layer_array,
-        enabled_instance_extension_count,
-        enabled_instance_extension_array,
+        layer_count,
+        layer_array,
+        extension_count,
+        extension_array,
     };
 
     res->vkCreateInstance(&instance_create_info, NULL, &res->instance);
@@ -272,22 +248,8 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     physical_device_features.multiDrawIndirect = supported_features.multiDrawIndirect;
     physical_device_features.samplerAnisotropy = supported_features.samplerAnisotropy;
 
-    uint32_t device_extension_count = 0;
-    res->vkEnumerateDeviceExtensionProperties(res->physical_device, NULL, &device_extension_count, NULL);
-    VkExtensionProperties * device_extension_array = allocate<VkExtensionProperties>(device_extension_count);
-    res->vkEnumerateDeviceExtensionProperties(res->physical_device, NULL, &device_extension_count, device_extension_array);
-    for (uint32_t i = 0; i < device_extension_count; ++i) {
-        if (!strcmp(device_extension_array[i].extensionName, "VK_KHR_dedicated_allocation")) {
-            enabled_device_extension_array[enabled_device_extension_count++] = "VK_KHR_get_memory_requirements2";
-            enabled_device_extension_array[enabled_device_extension_count++] = "VK_KHR_dedicated_allocation";
-            res->dedicated_allocation = true;
-        }
-        if (!strcmp(device_extension_array[i].extensionName, "VK_NV_mesh_shader")) {
-            enabled_device_extension_array[enabled_device_extension_count++] = "VK_NV_mesh_shader";
-            res->mesh_shader = true;
-        }
-    }
-    free(device_extension_array);
+    const char * device_extension_array[64];
+    uint32_t device_extension_count = load_device_extensions(res, device_extension_array, &device_extension_count);
 
     VkPhysicalDeviceMeshShaderFeaturesNV mesh_shader_features = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV,
@@ -296,24 +258,22 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         true,
     };
 
-    void * device_create_info_next = NULL;
-
-    if (res->mesh_shader) {
-        device_create_info_next = &mesh_shader_features;
-    }
-
     VkDeviceCreateInfo device_create_info = {
         VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        device_create_info_next,
+        NULL,
         0,
         1,
         &device_queue_create_info,
         0,
         NULL,
-        enabled_device_extension_count,
-        enabled_device_extension_array,
+        device_extension_count,
+        device_extension_array,
         &physical_device_features,
     };
+
+    if (res->extension.mesh_shader) {
+        device_create_info.pNext = &mesh_shader_features;
+    }
 
     res->vkCreateDevice(res->physical_device, &device_create_info, NULL, &res->device);
 

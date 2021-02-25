@@ -5,6 +5,7 @@
 #include "buffer.cpp"
 #include "compute_pipeline.cpp"
 #include "debug.cpp"
+#include "extension.cpp"
 #include "framebuffer.cpp"
 #include "image.cpp"
 #include "info.cpp"
