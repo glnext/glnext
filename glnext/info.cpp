@@ -20,6 +20,7 @@ PyObject * glnext_meth_info(PyObject * self, PyObject * vargs, PyObject * kwargs
 
     #define load(name) PFN_ ## name name = (PFN_ ## name)vkGetInstanceProcAddr(instance, #name)
 
+    load(vkEnumerateInstanceVersion);
     load(vkEnumerateInstanceLayerProperties);
     load(vkEnumerateInstanceExtensionProperties);
     load(vkCreateInstance);
@@ -29,38 +30,30 @@ PyObject * glnext_meth_info(PyObject * self, PyObject * vargs, PyObject * kwargs
 
     load(vkDestroyInstance);
     load(vkEnumeratePhysicalDevices);
+    load(vkEnumerateDeviceExtensionProperties);
     load(vkGetPhysicalDeviceProperties);
 
     #undef load
 
-    uint32_t layer_count = 0;
-    vkEnumerateInstanceLayerProperties(&layer_count, NULL);
-    VkLayerProperties * layer_array = allocate<VkLayerProperties>(layer_count);
-    vkEnumerateInstanceLayerProperties(&layer_count, layer_array);
+    uint32_t api_version = VK_API_VERSION_1_0;
 
-    PyObject * layers = PyList_New(layer_count);
-    for (uint32_t i = 0; i < layer_count; ++i) {
-        PyList_SetItem(layers, i, PyUnicode_FromString(layer_array[i].layerName));
+    if (vkEnumerateInstanceVersion) {
+        vkEnumerateInstanceVersion(&api_version);
     }
 
-    PyMem_Free(layer_array);
+    PyObject * version = PyUnicode_FromFormat("%d.%d.%d", VK_VERSION_MAJOR(api_version), VK_VERSION_MINOR(api_version), VK_VERSION_PATCH(api_version));
 
-    uint32_t extension_count = 0;
-    vkEnumerateInstanceExtensionProperties(NULL, &extension_count, NULL);
-    VkExtensionProperties * extension_array = allocate<VkExtensionProperties>(extension_count);
-    vkEnumerateInstanceExtensionProperties(NULL, &extension_count, extension_array);
+    PyObject * layers_map = get_instance_layers(vkEnumerateInstanceLayerProperties);
+    PyObject * layers = PySequence_List(layers_map);
+    Py_DECREF(layers_map);
 
-    PyObject * extensions = PyList_New(extension_count);
-    for (uint32_t i = 0; i < extension_count; ++i) {
-        PyList_SetItem(extensions, i, PyUnicode_FromString(extension_array[i].extensionName));
-    }
-
-    PyMem_Free(extension_array);
+    PyObject * extensions_map = get_instance_extensions(vkEnumerateInstanceExtensionProperties);
+    PyObject * extensions = PySequence_List(extensions_map);
+    Py_DECREF(extensions_map);
 
     uint32_t physical_device_count = 0;
+    VkPhysicalDevice physical_device_array[64];
     vkEnumeratePhysicalDevices(instance, &physical_device_count, NULL);
-
-    VkPhysicalDevice * physical_device_array = (VkPhysicalDevice *)PyMem_Malloc(sizeof(VkPhysicalDevice) * physical_device_count);
     vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_device_array);
 
     PyObject * phyiscal_devices = PyList_New(physical_device_count);
@@ -68,10 +61,15 @@ PyObject * glnext_meth_info(PyObject * self, PyObject * vargs, PyObject * kwargs
     for (uint32_t i = 0; i < physical_device_count; ++i) {
         VkPhysicalDeviceProperties properties = {};
         vkGetPhysicalDeviceProperties(physical_device_array[i], &properties);
-        PyList_SetItem(phyiscal_devices, i, Py_BuildValue("{ss}", "name", properties.deviceName));
+
+        PyObject * device_extensions_map = get_device_extensions(physical_device_array[i], vkEnumerateDeviceExtensionProperties);
+        PyObject * device_extensions = PySequence_List(device_extensions_map);
+        Py_DECREF(device_extensions_map);
+
+        PyList_SetItem(phyiscal_devices, i, Py_BuildValue("{sssN}", "name", properties.deviceName, "extensions", device_extensions));
     }
 
     vkDestroyInstance(instance, NULL);
-    return Py_BuildValue("{sNsNsN}", "layers", layers, "extensions", extensions, "phyiscal_devices", phyiscal_devices);
-    return NULL;
+
+    return Py_BuildValue("{sNsNsNsN}", "version", version, "layers", layers, "extensions", extensions, "phyiscal_devices", phyiscal_devices);
 }

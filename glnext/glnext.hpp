@@ -171,6 +171,7 @@ struct Instance {
     VkPipelineCache pipeline_cache;
     VkDebugUtilsMessengerEXT debug_messenger;
 
+    VkBool32 debug;
     uint32_t api_version;
     uint32_t queue_family_index;
     uint32_t host_memory_type_index;
@@ -497,6 +498,9 @@ void load_device_methods(Instance * instance);
 PyObject * get_instance_layers(PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties);
 PyObject * get_instance_extensions(PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties);
 PyObject * get_device_extensions(VkPhysicalDevice physical_device, PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties);
+
+uint32_t load_instance_layers(Instance * instance, const char ** array, PyObject * extra_layers);
+uint32_t load_instance_extensions(Instance * instance, const char ** array, const char * surface);
 uint32_t load_device_extensions(Instance * instance, const char ** array);
 
 void install_debug_messenger(Instance * instance);

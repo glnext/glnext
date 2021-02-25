@@ -105,42 +105,18 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->vkGetInstanceProcAddr = vkGetInstanceProcAddr;
     load_library_methods(res);
 
+    res->debug = args.debug;
     res->api_version = VK_API_VERSION_1_0;
 
     if (res->vkEnumerateInstanceVersion) {
         res->vkEnumerateInstanceVersion(&res->api_version);
     }
 
-    uint32_t layer_count = 0;
-    uint32_t extension_count = 0;
-
     const char * layer_array[64];
+    uint32_t layer_count = load_instance_layers(res, layer_array, args.layers);
+
     const char * extension_array[64];
-
-    for (uint32_t i = 0; i < PyList_Size(args.layers); ++i) {
-        layer_array[layer_count++] = PyUnicode_AsUTF8(PyList_GetItem(args.layers, i));
-    }
-
-    if (surface) {
-        extension_array[extension_count++] = "VK_KHR_surface";
-        extension_array[extension_count++] = surface;
-    }
-
-    PyObject * layers = get_instance_layers(res->vkEnumerateInstanceLayerProperties);
-    PyObject * extensions = get_instance_extensions(res->vkEnumerateInstanceExtensionProperties);
-
-    if (args.debug) {
-        layer_array[layer_count++] = "VK_LAYER_KHRONOS_validation";
-        extension_array[extension_count++] = "VK_EXT_debug_utils";
-    }
-
-    if (!args.debug && getenv("GLNEXT_VALIDATION") && has_key(layers, "VK_LAYER_KHRONOS_validation")) {
-        layer_array[layer_count++] = "VK_LAYER_KHRONOS_validation";
-    }
-
-    if (res->api_version < VK_API_VERSION_1_1 && has_key(extensions, "VK_KHR_get_physical_device_properties2")) {
-        extension_array[extension_count++] = "VK_KHR_get_physical_device_properties2";
-    }
+    uint32_t extension_count = load_instance_extensions(res, extension_array, surface);
 
     VkApplicationInfo application_info = {
         VK_STRUCTURE_TYPE_APPLICATION_INFO,
