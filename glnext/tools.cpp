@@ -22,7 +22,7 @@ double dot(const vec3 & a, const vec3 & b) {
 }
 
 PyObject * glnext_meth_camera(PyObject * self, PyObject * args, PyObject * kwargs) {
-    static char * keywords[] = {"eye", "target", "up", "fov", "aspect", "near", "far", NULL};
+    static char * keywords[] = {"eye", "target", "up", "fov", "aspect", "near", "far", "size", NULL};
 
     vec3 eye;
     vec3 target;
@@ -31,11 +31,12 @@ PyObject * glnext_meth_camera(PyObject * self, PyObject * args, PyObject * kwarg
     double aspect = 1.0;
     double znear = 0.1;
     double zfar = 1000.0;
+    double size = 1.0;
 
     int args_ok = PyArg_ParseTupleAndKeywords(
         args,
         kwargs,
-        "(ddd)(ddd)|(ddd)dddd",
+        "(ddd)(ddd)|(ddd)ddddd",
         keywords,
         &eye.x,
         &eye.y,
@@ -49,21 +50,39 @@ PyObject * glnext_meth_camera(PyObject * self, PyObject * args, PyObject * kwarg
         &fov,
         &aspect,
         &znear,
-        &zfar
+        &zfar,
+        &size
     );
 
     if (!args_ok) {
         return NULL;
     }
 
-    const double r1 = tan(fov * 0.01745329251994329576923690768489 / 2.0);
-    const double r2 = r1 * aspect;
-    const double r3 = (zfar + znear) / (zfar - znear);
-    const double r4 = (2.0 * zfar * znear) / (zfar - znear);
     const vec3 f = normalize(target - eye);
     const vec3 s = normalize(cross(f, up));
     const vec3 u = cross(s, f);
     const vec3 t = {-dot(s, eye), -dot(u, eye), -dot(f, eye)};
+
+    if (!fov) {
+        const double r1 = size;
+        const double r2 = r1 * aspect;
+        const double r3 = 1.0 / (zfar - znear);
+        const double r4 = znear / (zfar - znear);
+
+        float res[] = {
+            (float)(s.x / r2), (float)(u.x / r1), (float)(r3 * f.x), 0.0f,
+            (float)(s.y / r2), (float)(u.y / r1), (float)(r3 * f.y), 0.0f,
+            (float)(s.z / r2), (float)(u.z / r1), (float)(r3 * f.z), 0.0f,
+            0.0f, 0.0f, (float)(r3 * t.z - r4), 1.0f,
+        };
+
+        return PyBytes_FromStringAndSize((char *)res, 64);
+    }
+
+    const double r1 = tan(fov * 0.01745329251994329576923690768489 / 2.0);
+    const double r2 = r1 * aspect;
+    const double r3 = zfar / (zfar - znear);
+    const double r4 = (zfar * znear) / (zfar - znear);
 
     float res[] = {
         (float)(s.x / r2), (float)(u.x / r1), (float)(r3 * f.x), (float)f.x,
