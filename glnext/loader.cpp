@@ -45,6 +45,7 @@ void load_instance_methods(Instance * self) {
     load(vkEnumeratePhysicalDevices);
     load(vkEnumerateDeviceExtensionProperties);
     load(vkGetPhysicalDeviceProperties);
+    load(vkGetPhysicalDeviceFeatures2);
     load(vkGetPhysicalDeviceMemoryProperties);
     load(vkGetPhysicalDeviceFeatures);
     load(vkGetPhysicalDeviceFormatProperties);
