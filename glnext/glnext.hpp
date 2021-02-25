@@ -1,10 +1,8 @@
 #pragma once
 
-#define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
 
-#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
 #ifdef BUILD_WINDOWS

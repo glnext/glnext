@@ -11,7 +11,11 @@ for known in PLATFORMS:
         target = known
         break
 
-define_macros = [('BUILD_' + target.upper(), None)]
+define_macros = [
+    ('BUILD_' + target.upper(), None),
+    ('PY_SSIZE_T_CLEAN', None),
+    ('VK_NO_PROTOTYPES', None),
+]
 include_dirs = ['./include']
 extra_compile_args = []
 extra_link_args = []
