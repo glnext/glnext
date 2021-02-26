@@ -117,6 +117,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         "indirect_buffer_offset",
         "count_buffer_offset",
         "topology",
+        "restart_index",
+        "short_index",
         "depth_test",
         "depth_write",
         "bindings",
@@ -147,6 +149,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         VkDeviceSize indirect_buffer_offset = 0;
         VkDeviceSize count_buffer_offset = 0;
         PyObject * topology;
+        VkBool32 restart_index = true;
+        VkBool32 short_index = false;
         VkBool32 depth_test = true;
         VkBool32 depth_write = true;
         PyObject * bindings;
@@ -161,7 +165,7 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     int args_ok = PyArg_ParseTupleAndKeywords(
         vargs,
         kwargs,
-        "|$O!O!O!O!OOIIIIIOOOOOKKKKKOppOO",
+        "|$O!O!O!O!OOIIIIIOOOOOKKKKKOppppOO",
         keywords,
         &PyBytes_Type,
         &args.vertex_shader,
@@ -189,6 +193,8 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         &args.indirect_buffer_offset,
         &args.count_buffer_offset,
         &args.topology,
+        &args.restart_index,
+        &args.short_index,
         &args.depth_test,
         &args.depth_write,
         &args.bindings,
@@ -258,9 +264,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         binding_array[i] = {i, istride, VK_VERTEX_INPUT_RATE_INSTANCE};
     }
 
-    VkBool32 short_index = false;
-    uint32_t index_size = short_index ? 2 : 4;
-
     res->binding_count = (uint32_t)PyList_Size(args.bindings);
     res->binding_array = (DescriptorBinding *)PyMem_Malloc(sizeof(DescriptorBinding) * PyList_Size(args.bindings));
 
@@ -276,7 +279,14 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
     res->indirect_buffer = get_buffer(self->instance, args.indirect_buffer);
     res->count_buffer = get_buffer(self->instance, args.count_buffer);
 
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+
     uint32_t indirect_size = indirect_stride;
+    uint32_t index_size = args.short_index ? 2 : 4;
+
+    res->index_type = args.short_index ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
 
     if (args.index_count || res->index_buffer) {
         indirect_size = indirect_indexed_stride;
@@ -284,10 +294,6 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
 
     if (args.mesh_shader != Py_None) {
         indirect_size = indirect_mesh_task_stride;
-    }
-
-    if (PyErr_Occurred()) {
-        return NULL;
     }
 
     if (vstride && !res->vertex_buffer) {
@@ -548,12 +554,25 @@ RenderPipeline * Framebuffer_meth_render(Framebuffer * self, PyObject * vargs, P
         attribute_array,
     };
 
+    VkPrimitiveTopology topology = get_topology(args.topology);
+    VkBool32 restart_index = false;
+
+    if (res->index_buffer && args.restart_index) {
+        switch (topology) {
+            case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP:
+            case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP:
+            case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN:
+                restart_index = true;
+                break;
+        }
+    }
+
     VkPipelineInputAssemblyStateCreateInfo pipeline_input_assembly_state = {
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         NULL,
         0,
-        get_topology(args.topology),
-        false,
+        topology,
+        restart_index,
     };
 
     VkPipelineViewportStateCreateInfo pipeline_viewport_state = {
@@ -797,7 +816,7 @@ void execute_render_pipeline(RenderPipeline * self, VkCommandBuffer command_buff
             command_buffer,
             self->index_buffer->buffer,
             self->parameters.index_buffer_offset,
-            VK_INDEX_TYPE_UINT32
+            self->index_type
         );
     }
 

@@ -372,6 +372,7 @@ struct RenderPipeline {
     VkPipelineLayout pipeline_layout;
     VkDescriptorPool descriptor_pool;
     VkDescriptorSet descriptor_set;
+    VkIndexType index_type;
     uint32_t attribute_count;
     VkBuffer * attribute_buffer_array;
     VkDeviceSize * attribute_offset_array;
