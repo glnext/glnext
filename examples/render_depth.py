@@ -1,8 +1,8 @@
 import glnext
-from glnext_compiler import glsl
-from objloader import Obj
 import numpy as np
+from glnext_compiler import glsl
 from matplotlib import pyplot as plt
+from objloader import Obj
 
 instance = glnext.instance()
 
