@@ -1,8 +1,8 @@
-FROM python:3.9.1
+FROM python:3.9.2
 RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key add - &&\
     echo "deb https://packages.lunarg.com/vulkan/1.2.162 bionic main" >> /etc/apt/sources.list &&\
     apt-get update && apt-get install -y vulkan-headers vulkan-tools vulkan-validationlayers libvulkan-dev shaderc
-RUN python3 -m pip install pytest pillow numpy sphinx sphinx_rtd_theme glnext_compiler==0.3.0
+RUN python3 -m pip install pytest==6.2.2 pillow==8.1.0 numpy==1.20.1 sphinx==3.5.1 sphinx_rtd_theme==0.5.1 glnext_compiler==0.3.0
 ENV VK_ICD_FILENAMES=/swiftshader/vk_swiftshader_icd.json PYTHONUNBUFFERED=1
 COPY swiftshader /swiftshader
 
