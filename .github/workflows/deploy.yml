@@ -13,11 +13,11 @@ jobs:
       - name: sdist
         run: docker run --rm -v `pwd`:/build -w /build python:3.8-slim python3 setup.py sdist
 
-      # - name: publish
-      #   uses: pypa/gh-action-pypi-publish@master
-      #   with:
-      #     user: __token__
-      #     password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: publish
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
       - name: docs
         run: curl -X POST -d token=${{ secrets.RTD_API_TOKEN }} https://readthedocs.org/api/v2/webhook/glnext/147919/
