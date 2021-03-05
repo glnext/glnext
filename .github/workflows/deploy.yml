@@ -10,14 +10,22 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: deps
+        run: python -m pip install -U pip wheel setuptools twine
+
       - name: sdist
-        run: docker run --rm -v `pwd`:/build -w /build python:3.8-slim python3 setup.py sdist
+        run: python setup.py sdist
 
       - name: publish
-        uses: pypa/gh-action-pypi-publish@master
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: python -m twine upload dist/*
 
       - name: docs
         run: curl -X POST -d token=${{ secrets.RTD_API_TOKEN }} https://readthedocs.org/api/v2/webhook/glnext/147919/
