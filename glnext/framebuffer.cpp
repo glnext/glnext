@@ -1,6 +1,6 @@
 #include "glnext.hpp"
 
-Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObject * kwargs) {
+Framebuffer * new_framebuffer(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "size",
         "format",
@@ -314,6 +314,14 @@ Framebuffer * Instance_meth_framebuffer(Instance * self, PyObject * vargs, PyObj
         Py_INCREF(res->image_array[i]);
     }
 
+    return res;
+}
+
+Framebuffer * Task_meth_framebuffer(Task * self, PyObject * vargs, PyObject * kwargs) {
+    Framebuffer * res = new_framebuffer(self->instance, vargs, kwargs);
+    if (!res) {
+        return NULL;
+    }
     PyList_Append(self->task_list, (PyObject *)res);
     return res;
 }

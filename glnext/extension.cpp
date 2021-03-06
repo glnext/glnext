@@ -82,10 +82,10 @@ uint32_t load_instance_extensions(Instance * instance, const char ** array, cons
     return count;
 }
 
-uint32_t load_device_extensions(Instance * instance, const char ** array) {
+uint32_t load_device_extensions(Instance * instance, const char ** array, const char * surface) {
     uint32_t count = 0;
 
-    if (instance->presenter.supported) {
+    if (surface) {
         array[count++] = "VK_KHR_swapchain";
     }
 

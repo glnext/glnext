@@ -10,11 +10,11 @@ C = np.zeros(11)
 
 vertex_data = np.array([A, -B, C, A, B, C, -B, A, C, B, A, C]).T.astype('f4').tobytes()
 vertex_count = len(vertex_data) // 12
-print(vertex_count)
 
 instance = glnext.instance()
+task = instance.task()
 
-framebuffer = instance.framebuffer((512, 512))
+framebuffer = task.framebuffer((512, 512))
 
 pipeline = framebuffer.render(
     vertex_shader=glsl('''
@@ -63,6 +63,6 @@ pipeline.update(
     vertex_buffer=vertex_data,
 )
 
-instance.run()
+task.run()
 data = framebuffer.output[0].read()
 Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()

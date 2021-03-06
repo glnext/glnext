@@ -1,12 +1,7 @@
 #include "glnext.hpp"
 
-struct CompatibleFormat {
-    VkFormat src;
-    VkFormat dst;
-};
-
 const uint32_t compatible_format_count = 8;
-const CompatibleFormat compatible_format_array[] = {
+const SurfaceCompatibleFormat compatible_format_array[] = {
     {VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_UNORM},
     {VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_B8G8R8A8_SRGB},
     {VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_A2B10G10R10_UNORM_PACK32},
@@ -17,12 +12,12 @@ const CompatibleFormat compatible_format_array[] = {
     {VK_FORMAT_R32G32B32A32_SFLOAT, VK_FORMAT_B8G8R8A8_UNORM},
 };
 
-CompatibleFormat * get_compatible_format(VkFormat src, uint32_t surface_format_count, VkSurfaceFormatKHR * surface_format_array) {
+SurfaceCompatibleFormat * get_compatible_format(VkFormat src, uint32_t surface_format_count, VkSurfaceFormatKHR * surface_format_array) {
     for (uint32_t i = 0; i < compatible_format_count; ++i) {
         for (uint32_t j = 0; j < surface_format_count; ++j) {
             if (surface_format_array[j].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                 if (src == compatible_format_array[i].src && surface_format_array[j].format == compatible_format_array[i].dst) {
-                    return (CompatibleFormat *)&compatible_format_array[i];
+                    return (SurfaceCompatibleFormat *)&compatible_format_array[i];
                 }
             }
         }
@@ -30,7 +25,7 @@ CompatibleFormat * get_compatible_format(VkFormat src, uint32_t surface_format_c
     return NULL;
 }
 
-PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * kwargs) {
+Surface * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * kwargs) {
     static char * keywords[] = {
         "window",
         "image",
@@ -56,12 +51,31 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
         return NULL;
     }
 
-    if (!self->presenter.supported) {
-        PyErr_Format(PyExc_ValueError, "surface not enabled");
-        return NULL;
-    }
+    // if (!self->presenter.supported) {
+    //     PyErr_Format(PyExc_ValueError, "surface not enabled");
+    //     return NULL;
+    // }
 
-    VkSurfaceKHR surface = NULL;
+    // for (uint32_t i = 0; i < PyList_Size(self->surface_list); ++i) {
+    //     Surface * surface = PyList_GET_ITEM(self->surface_list, i);
+    //     if (PyObject_RichCompare(surface->window, args.window, Py_EQ)) {
+    //         surface->image = args.image;
+    //         Py_INCREF(surface);
+    //         return surface;
+    //     }
+    // }
+
+    Surface * res = PyObject_New(Surface, self->state->Surface_type);
+    res->instance = self;
+    res->image = args.image;
+
+    Py_INCREF(args.window);
+    res->window = args.window;
+
+    res->surface = NULL;
+    res->swapchain = NULL;
+    res->semaphore = NULL;
+    res->images = {};
 
     #ifdef BUILD_WINDOWS
     if (self->vkCreateWin32SurfaceKHR) {
@@ -76,7 +90,7 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
             hwnd,
         };
 
-        self->vkCreateWin32SurfaceKHR(self->instance, &surface_create_info, NULL, &surface);
+        self->vkCreateWin32SurfaceKHR(self->instance, &surface_create_info, NULL, &res->surface);
     }
     #endif
 
@@ -93,7 +107,7 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
             window,
         };
 
-        self->vkCreateXlibSurfaceKHR(self->instance, &surface_create_info, NULL, &surface);
+        self->vkCreateXlibSurfaceKHR(self->instance, &surface_create_info, NULL, &res->surface);
     }
     #endif
 
@@ -108,26 +122,26 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
             layer,
         };
 
-        self->vkCreateMetalSurfaceEXT(self->instance, &surface_create_info, NULL, &surface);
+        self->vkCreateMetalSurfaceEXT(self->instance, &surface_create_info, NULL, &res->surface);
     }
     #endif
 
-    if (!surface) {
+    if (!res->surface) {
         PyErr_Format(PyExc_RuntimeError, "cannot create surface");
         return NULL;
     }
 
     VkBool32 present_support = false;
-    self->vkGetPhysicalDeviceSurfaceSupportKHR(self->physical_device, self->queue_family_index, surface, &present_support);
+    self->vkGetPhysicalDeviceSurfaceSupportKHR(self->physical_device, self->queue_family_index, res->surface, &present_support);
 
     VkSurfaceCapabilitiesKHR surface_capabilities = {};
-    self->vkGetPhysicalDeviceSurfaceCapabilitiesKHR(self->physical_device, surface, &surface_capabilities);
+    self->vkGetPhysicalDeviceSurfaceCapabilitiesKHR(self->physical_device, res->surface, &surface_capabilities);
 
     uint32_t surface_format_count = 0;
-    self->vkGetPhysicalDeviceSurfaceFormatsKHR(self->physical_device, surface, &surface_format_count, NULL);
+    self->vkGetPhysicalDeviceSurfaceFormatsKHR(self->physical_device, res->surface, &surface_format_count, NULL);
     VkSurfaceFormatKHR * surface_format_array = (VkSurfaceFormatKHR *)PyMem_Malloc(sizeof(VkSurfaceFormatKHR) * surface_format_count);
-    self->vkGetPhysicalDeviceSurfaceFormatsKHR(self->physical_device, surface, &surface_format_count, surface_format_array);
-    CompatibleFormat * format = get_compatible_format(args.image->format, surface_format_count, surface_format_array);
+    self->vkGetPhysicalDeviceSurfaceFormatsKHR(self->physical_device, res->surface, &surface_format_count, surface_format_array);
+    SurfaceCompatibleFormat * format = get_compatible_format(args.image->format, surface_format_count, surface_format_array);
     PyMem_Free(surface_format_array);
 
     if (!format) {
@@ -139,7 +153,7 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
         VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         NULL,
         0,
-        surface,
+        res->surface,
         surface_capabilities.minImageCount,
         format->dst,
         VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
@@ -156,60 +170,39 @@ PyObject * Instance_meth_surface(Instance * self, PyObject * vargs, PyObject * k
         NULL,
     };
 
-    VkSwapchainKHR swapchain = NULL;
-    self->vkCreateSwapchainKHR(self->device, &swapchain_create_info, NULL, &swapchain);
+    self->vkCreateSwapchainKHR(self->device, &swapchain_create_info, NULL, &res->swapchain);
 
-    VkSemaphore semaphore = NULL;
     VkSemaphoreCreateInfo semaphore_create_info = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, NULL, 0};
-    self->vkCreateSemaphore(self->device, &semaphore_create_info, NULL, &semaphore);
+    self->vkCreateSemaphore(self->device, &semaphore_create_info, NULL, &res->semaphore);
 
-    SwapChainImages images = {};
-    self->vkGetSwapchainImagesKHR(self->device, swapchain, &images.image_count, NULL);
-    self->vkGetSwapchainImagesKHR(self->device, swapchain, &images.image_count, images.image_array);
+    self->vkGetSwapchainImagesKHR(self->device, res->swapchain, &res->images.image_count, NULL);
+    self->vkGetSwapchainImagesKHR(self->device, res->swapchain, &res->images.image_count, res->images.image_array);
 
-    uint32_t idx = self->presenter.surface_count++;
+    PyList_Append(self->surface_list, (PyObject *)res);
+    return res;
+}
 
-    self->presenter.surface_array[idx] = surface;
-    self->presenter.swapchain_array[idx] = swapchain;
-    self->presenter.semaphore_array[idx] = semaphore;
-    self->presenter.image_source_array[idx] = args.image->image;
-    self->presenter.image_array[idx] = images;
-    self->presenter.wait_stage_array[idx] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-    self->presenter.result_array[idx] = VK_SUCCESS;
-    self->presenter.index_array[idx] = 0;
+Image * Surface_get_image(Surface * self) {
+    Py_INCREF(self->image);
+    return self->image;
+}
 
-    self->presenter.copy_image_barrier_array[idx] = {
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        NULL,
-        0,
-        0,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        NULL,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-    };
+int Surface_set_image(Surface * self, Image * value) {
+    if (Py_TYPE(value) != self->instance->state->Image_type) {
+        PyErr_Format(PyExc_TypeError, "image");
+        return -1;
+    }
 
-    self->presenter.present_image_barrier_array[idx] = {
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        NULL,
-        0,
-        0,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        VK_QUEUE_FAMILY_IGNORED,
-        VK_QUEUE_FAMILY_IGNORED,
-        NULL,
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-    };
+    if (self->image->format != value->format) {
+        PyErr_Format(PyExc_ValueError, "image format");
+        return -1;
+    }
 
-    self->presenter.image_blit_array[idx] = {
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-        {{0, 0, 0}, {(int)args.image->extent.width, (int)args.image->extent.height, 1}},
-        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-        {{0, 0, 0}, {(int)args.image->extent.width, (int)args.image->extent.height, 1}},
-    };
+    if (self->image->extent.width != value->extent.width || self->image->extent.height != value->extent.height) {
+        PyErr_Format(PyExc_ValueError, "image size");
+        return -1;
+    }
 
-    Py_RETURN_NONE;
+    self->image = value;
+    return 0;
 }

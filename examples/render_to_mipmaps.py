@@ -3,8 +3,9 @@ from glnext_compiler import glsl
 from PIL import Image
 
 instance = glnext.instance()
+task = instance.task()
 
-triangle_framebuffer = instance.framebuffer((512, 512), levels=10, mode='texture')
+triangle_framebuffer = task.framebuffer((512, 512), levels=10, mode='texture')
 
 triangle_pipeline = triangle_framebuffer.render(
     vertex_shader=glsl('''
@@ -44,7 +45,7 @@ triangle_pipeline = triangle_framebuffer.render(
     vertex_count=3,
 )
 
-framebuffer = instance.framebuffer((512, 512))
+framebuffer = task.framebuffer((512, 512))
 
 pipeline = framebuffer.render(
     vertex_shader=glsl('''
@@ -116,6 +117,6 @@ pipeline.update(
     ]),
 )
 
-instance.run()
+task.run()
 data = framebuffer.output[0].read()
 Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()

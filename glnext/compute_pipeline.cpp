@@ -226,8 +226,8 @@ ComputePipeline * Framebuffer_meth_compute(Framebuffer * self, PyObject * vargs,
     return res;
 }
 
-ComputePipeline * Instance_meth_compute(Instance * self, PyObject * vargs, PyObject * kwargs) {
-    ComputePipeline * res = new_compute_pipeline(self, vargs, kwargs);
+ComputePipeline * Task_meth_compute(Task * self, PyObject * vargs, PyObject * kwargs) {
+    ComputePipeline * res = new_compute_pipeline(self->instance, vargs, kwargs);
     if (!res) {
         return NULL;
     }

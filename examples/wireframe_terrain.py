@@ -26,8 +26,9 @@ def terrain(size):
 vertex_data, index_data = terrain(64)
 
 instance = glnext.instance()
+task = instance.task()
 
-framebuffer = instance.framebuffer((1280, 720))
+framebuffer = task.framebuffer((1280, 720))
 
 framebuffer.update(
     clear_values=glnext.pack([1.0, 1.0, 1.0, 1.0]),
@@ -78,6 +79,6 @@ pipeline.update(
     index_buffer=index_data,
 )
 
-instance.run()
+task.run()
 data = framebuffer.output[0].read()
 Image.frombuffer('RGBA', (1280, 720), data, 'raw', 'RGBA', 0, -1).show()

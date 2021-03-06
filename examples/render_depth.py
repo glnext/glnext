@@ -5,8 +5,9 @@ from matplotlib import pyplot as plt
 from objloader import Obj
 
 instance = glnext.instance()
+task = instance.task()
 
-framebuffer = instance.framebuffer((512, 512), '1f', samples=1)
+framebuffer = task.framebuffer((512, 512), '1f', samples=1)
 
 vertex_size = 12
 mesh = Obj.open('examples/monkey.obj').pack('vx vy vz')
@@ -65,7 +66,7 @@ pipeline.update(
     vertex_buffer=mesh,
 )
 
-instance.run()
+task.run()
 data = framebuffer.output[0].read()
 array = np.ndarray((512, 512), 'f4', data)[::-1]
 plt.imshow(array, 'YlGnBu', vmin=0.8, vmax=1.0)

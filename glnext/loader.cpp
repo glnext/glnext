@@ -104,6 +104,7 @@ void load_device_methods(Instance * self) {
     load(vkCreateGraphicsPipelines);
     load(vkCreateDescriptorSetLayout);
     load(vkCmdEndRenderPass);
+    load(vkCmdExecuteCommands);
     load(vkCmdPipelineBarrier);
     load(vkCreateDescriptorPool);
     load(vkCreateImage);

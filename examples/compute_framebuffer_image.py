@@ -3,8 +3,9 @@ from glnext_compiler import glsl
 from PIL import Image
 
 instance = glnext.instance()
+task = instance.task()
 
-framebuffer = instance.framebuffer((512, 512), compute=True)
+framebuffer = task.framebuffer((512, 512), compute=True)
 
 compute = framebuffer.compute(
     compute_count=(512, 512),
@@ -33,6 +34,6 @@ compute = framebuffer.compute(
     ],
 )
 
-instance.run()
+task.run()
 data = framebuffer.output[0].read()
 Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()

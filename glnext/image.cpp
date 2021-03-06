@@ -85,7 +85,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     allocate_memory(memory);
     bind_image(res);
 
-    VkCommandBuffer command_buffer = begin_commands(self);
+    begin_commands(self);
 
     VkImageMemoryBarrier image_barrier_transfer = {
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -101,7 +101,7 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     };
 
     self->vkCmdPipelineBarrier(
-        command_buffer,
+        self->command_buffer,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0,
@@ -114,7 +114,6 @@ Image * Instance_meth_image(Instance * self, PyObject * vargs, PyObject * kwargs
     );
 
     end_commands(self);
-
     return res;
 }
 
@@ -125,12 +124,18 @@ PyObject * Image_meth_read(Image * self) {
     }
 
     HostBuffer temp = {};
-    new_temp_buffer(self->instance, &temp, self->size);
-
-    VkCommandBuffer command_buffer = begin_commands(self->instance);
+    VkDeviceSize offset = 0;
+    if (self->instance->group) {
+        temp = self->instance->group->temp;
+        temp.ptr = (char *)temp.ptr + self->instance->group->offset;
+        offset = self->instance->group->offset;
+    } else {
+        new_temp_buffer(self->instance, &temp, self->size);
+        begin_commands(self->instance);
+    }
 
     VkBufferImageCopy copy = {
-        0,
+        offset,
         self->extent.width,
         self->extent.height,
         {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, self->layers},
@@ -139,13 +144,21 @@ PyObject * Image_meth_read(Image * self) {
     };
 
     self->instance->vkCmdCopyImageToBuffer(
-        command_buffer,
+        self->instance->command_buffer,
         self->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         temp.buffer,
         1,
         &copy
     );
+
+    if (self->instance->group) {
+        PyObject * mem = PyMemoryView_FromMemory((char *)temp.ptr, self->size, PyBUF_READ);
+        PyList_Append(self->instance->group->output, mem);
+        Py_DECREF(mem);
+        self->instance->group->offset += self->size;
+        Py_RETURN_NONE;
+    }
 
     end_commands(self->instance);
     PyObject * res = PyBytes_FromStringAndSize((char *)temp.ptr, self->size);
@@ -165,12 +178,18 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
     }
 
     HostBuffer temp = {};
-    new_temp_buffer(self->instance, &temp, self->size);
+    VkDeviceSize offset = 0;
+    if (self->instance->group) {
+        temp = self->instance->group->temp;
+        temp.ptr = (char *)temp.ptr + self->instance->group->offset;
+        offset = self->instance->group->offset;
+    } else {
+        new_temp_buffer(self->instance, &temp, self->size);
+        begin_commands(self->instance);
+    }
 
     PyBuffer_ToContiguous(temp.ptr, &view, view.len, 'C');
     PyBuffer_Release(&view);
-
-    VkCommandBuffer command_buffer = begin_commands(self->instance);
 
     VkImageLayout image_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
@@ -196,7 +215,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
     };
 
     self->instance->vkCmdPipelineBarrier(
-        command_buffer,
+        self->instance->command_buffer,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         0,
@@ -209,7 +228,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
     );
 
     VkBufferImageCopy copy = {
-        0,
+        offset,
         self->extent.width,
         self->extent.height,
         {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, self->layers},
@@ -218,7 +237,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
     };
 
     self->instance->vkCmdCopyBufferToImage(
-        command_buffer,
+        self->instance->command_buffer,
         temp.buffer,
         self->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -241,7 +260,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
         };
 
         self->instance->vkCmdPipelineBarrier(
-            command_buffer,
+            self->instance->command_buffer,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
@@ -267,7 +286,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
         };
 
         self->instance->vkCmdPipelineBarrier(
-            command_buffer,
+            self->instance->command_buffer,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
             0,
@@ -281,7 +300,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
 
         build_mipmaps({
             self->instance,
-            command_buffer,
+            self->instance->command_buffer,
             self->extent.width,
             self->extent.height,
             self->levels,
@@ -289,6 +308,11 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
             1,
             &self,
         });
+    }
+
+    if (self->instance->group) {
+        self->instance->group->offset += self->size;
+        Py_RETURN_NONE;
     }
 
     end_commands(self->instance);

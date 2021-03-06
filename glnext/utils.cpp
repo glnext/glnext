@@ -1,6 +1,6 @@
 #include "glnext.hpp"
 
-VkCommandBuffer begin_commands(Instance * self) {
+void begin_commands(Instance * self) {
     VkCommandBufferBeginInfo command_buffer_begin_info = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         NULL,
@@ -9,7 +9,6 @@ VkCommandBuffer begin_commands(Instance * self) {
     };
 
     self->vkBeginCommandBuffer(self->command_buffer, &command_buffer_begin_info);
-    return self->command_buffer;
 }
 
 void end_commands(Instance * self) {
@@ -30,30 +29,6 @@ void end_commands(Instance * self) {
     self->vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
     self->vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
     self->vkResetFences(self->device, 1, &self->fence);
-}
-
-void end_commands_with_present(Instance * self) {
-    copy_present_images(self);
-
-    self->vkEndCommandBuffer(self->command_buffer);
-
-    VkSubmitInfo submit_info = {
-        VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        NULL,
-        self->presenter.surface_count,
-        self->presenter.semaphore_array,
-        self->presenter.wait_stage_array,
-        1,
-        &self->command_buffer,
-        0,
-        NULL,
-    };
-
-    self->vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
-    self->vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
-    self->vkResetFences(self->device, 1, &self->fence);
-
-    present_images(self);
 }
 
 Memory * new_memory(Instance * self, VkBool32 host) {
@@ -362,99 +337,6 @@ void build_mipmaps(BuildMipmapsInfo args) {
     }
 }
 
-void copy_present_images(Instance * self) {
-    if (!self->presenter.surface_count) {
-        return;
-    }
-
-    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-        self->vkAcquireNextImageKHR(
-            self->device,
-            self->presenter.swapchain_array[i],
-            UINT64_MAX,
-            self->presenter.semaphore_array[i],
-            NULL,
-            &self->presenter.index_array[i]
-        );
-    }
-
-    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-        VkImage image = self->presenter.image_array[i].image_array[self->presenter.index_array[i]];
-        self->presenter.copy_image_barrier_array[i].image = image;
-        self->presenter.present_image_barrier_array[i].image = image;
-    }
-
-    self->vkCmdPipelineBarrier(
-        self->command_buffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0,
-        0,
-        NULL,
-        0,
-        NULL,
-        self->presenter.surface_count,
-        self->presenter.copy_image_barrier_array
-    );
-
-    for (uint32_t i = 0; i < self->presenter.surface_count; ++i) {
-        self->vkCmdBlitImage(
-            self->command_buffer,
-            self->presenter.image_source_array[i],
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            self->presenter.image_array[i].image_array[self->presenter.index_array[i]],
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1,
-            &self->presenter.image_blit_array[i],
-            VK_FILTER_NEAREST
-        );
-    }
-
-    self->vkCmdPipelineBarrier(
-        self->command_buffer,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        0,
-        0,
-        NULL,
-        0,
-        NULL,
-        self->presenter.surface_count,
-        self->presenter.present_image_barrier_array
-    );
-}
-
-void present_images(Instance * self) {
-    if (!self->presenter.surface_count) {
-        return;
-    }
-
-    VkPresentInfoKHR present_info = {
-        VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        NULL,
-        0,
-        NULL,
-        self->presenter.surface_count,
-        self->presenter.swapchain_array,
-        self->presenter.index_array,
-        self->presenter.result_array,
-    };
-
-    self->vkQueuePresentKHR(self->queue, &present_info);
-
-    uint32_t idx = 0;
-    while (idx < self->presenter.surface_count) {
-        if (self->presenter.result_array[idx] == VK_ERROR_OUT_OF_DATE_KHR) {
-            self->vkDestroySemaphore(self->device, self->presenter.semaphore_array[idx], NULL);
-            self->vkDestroySwapchainKHR(self->device, self->presenter.swapchain_array[idx], NULL);
-            self->vkDestroySurfaceKHR(self->instance, self->presenter.surface_array[idx], NULL);
-            presenter_remove(&self->presenter, idx);
-            continue;
-        }
-        idx += 1;
-    }
-}
-
 VkPrimitiveTopology get_topology(PyObject * name) {
     if (!PyUnicode_CompareWithASCIIString(name, "points")) {
         return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
@@ -652,21 +534,4 @@ Format get_format(PyObject * name) {
     if (!strcmp(s, "16x")) return {VK_FORMAT_UNDEFINED, 16, pack_pad, 0};
     PyErr_Format(PyExc_ValueError, "format");
     return {};
-}
-
-void presenter_remove(Presenter * self, uint32_t index) {
-    self->surface_count -= 1;
-    for (uint32_t i = index; i < self->surface_count; ++i) {
-        self->surface_array[i] = self->surface_array[i + 1];
-        self->swapchain_array[i] = self->swapchain_array[i + 1];
-        self->wait_stage_array[i] = self->wait_stage_array[i + 1];
-        self->copy_image_barrier_array[i] = self->copy_image_barrier_array[i + 1];
-        self->present_image_barrier_array[i] = self->present_image_barrier_array[i + 1];
-        self->semaphore_array[i] = self->semaphore_array[i + 1];
-        self->image_source_array[i] = self->image_source_array[i + 1];
-        self->image_blit_array[i] = self->image_blit_array[i + 1];
-        self->image_array[i] = self->image_array[i + 1];
-        self->result_array[i] = self->result_array[i + 1];
-        self->index_array[i] = self->index_array[i + 1];
-    }
 }

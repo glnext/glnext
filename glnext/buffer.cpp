@@ -90,21 +90,34 @@ Buffer * Instance_meth_buffer(Instance * self, PyObject * vargs, PyObject * kwar
 
 PyObject * Buffer_meth_read(Buffer * self) {
     HostBuffer temp = {};
-    new_temp_buffer(self->instance, &temp, self->size);
+    VkDeviceSize offset = 0;
+    if (self->instance->group) {
+        temp = self->instance->group->temp;
+        temp.ptr = (char *)temp.ptr + self->instance->group->offset;
+        offset = self->instance->group->offset;
+    } else {
+        new_temp_buffer(self->instance, &temp, self->size);
+        begin_commands(self->instance);
+    }
 
-    VkCommandBuffer command_buffer = begin_commands(self->instance);
-
-    VkBufferCopy copy = {0, 0, self->size};
+    VkBufferCopy copy = {0, offset, self->size};
     self->instance->vkCmdCopyBuffer(
-        command_buffer,
+        self->instance->command_buffer,
         self->buffer,
         temp.buffer,
         1,
         &copy
     );
 
-    end_commands(self->instance);
+    if (self->instance->group) {
+        PyObject * mem = PyMemoryView_FromMemory((char *)temp.ptr, self->size, PyBUF_READ);
+        PyList_Append(self->instance->group->output, mem);
+        Py_DECREF(mem);
+        self->instance->group->offset += self->size;
+        Py_RETURN_NONE;
+    }
 
+    end_commands(self->instance);
     PyObject * res = PyBytes_FromStringAndSize((char *)temp.ptr, self->size);
     free_temp_buffer(self->instance, &temp);
     return res;
@@ -122,21 +135,32 @@ PyObject * Buffer_meth_write(Buffer * self, PyObject * arg) {
     }
 
     HostBuffer temp = {};
-    new_temp_buffer(self->instance, &temp, self->size);
+    VkDeviceSize offset = 0;
+    if (self->instance->group) {
+        temp = self->instance->group->temp;
+        temp.ptr = (char *)temp.ptr + self->instance->group->offset;
+        offset = self->instance->group->offset;
+    } else {
+        new_temp_buffer(self->instance, &temp, self->size);
+        begin_commands(self->instance);
+    }
 
     PyBuffer_ToContiguous(temp.ptr, &view, view.len, 'C');
     PyBuffer_Release(&view);
 
-    VkCommandBuffer command_buffer = begin_commands(self->instance);
-
-    VkBufferCopy copy = {0, 0, self->size};
+    VkBufferCopy copy = {offset, 0, self->size};
     self->instance->vkCmdCopyBuffer(
-        command_buffer,
+        self->instance->command_buffer,
         temp.buffer,
         self->buffer,
         1,
         &copy
     );
+
+    if (self->instance->group) {
+        self->instance->group->offset += self->size;
+        Py_RETURN_NONE;
+    }
 
     end_commands(self->instance);
     free_temp_buffer(self->instance, &temp);

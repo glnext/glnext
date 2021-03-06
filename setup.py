@@ -33,7 +33,6 @@ glnext = Extension(
     name='glnext',
     sources=['glnext/glnext.cpp'],
     depends=[
-        'glnext/batch.cpp',
         'glnext/binding.cpp',
         'glnext/buffer.cpp',
         'glnext/compute_pipeline.cpp',
@@ -41,13 +40,14 @@ glnext = Extension(
         'glnext/extension.cpp',
         'glnext/framebuffer.cpp',
         'glnext/glnext.hpp',
+        'glnext/group.cpp',
         'glnext/image.cpp',
         'glnext/info.cpp',
         'glnext/instance.cpp',
         'glnext/loader.cpp',
         'glnext/render_pipeline.cpp',
-        'glnext/staging_buffer.cpp',
         'glnext/surface.cpp',
+        'glnext/task.cpp',
         'glnext/tools.cpp',
         'glnext/utils.cpp',
     ],
@@ -63,7 +63,7 @@ with open('README.md') as readme:
 
 setup(
     name='glnext',
-    version='0.7.1',
+    version='0.8.0',
     ext_modules=[glnext],
     long_description=long_description,
     long_description_content_type='text/markdown',

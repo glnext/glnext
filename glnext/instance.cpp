@@ -88,15 +88,15 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->fence = NULL;
     res->command_pool = NULL;
     res->command_buffer = NULL;
+    res->task_command_pool = NULL;
     res->pipeline_cache = NULL;
     res->debug_messenger = NULL;
 
     res->extension = {};
-    res->presenter = {};
-    res->presenter.supported = !!surface;
+    res->group = NULL;
 
+    res->surface_list = PyList_New(0);
     res->task_list = PyList_New(0);
-    res->staging_list = PyList_New(0);
     res->memory_list = PyList_New(0);
     res->buffer_list = PyList_New(0);
     res->image_list = PyList_New(0);
@@ -225,7 +225,7 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     physical_device_features.samplerAnisotropy = supported_features.samplerAnisotropy;
 
     const char * device_extension_array[64];
-    uint32_t device_extension_count = load_device_extensions(res, device_extension_array);
+    uint32_t device_extension_count = load_device_extensions(res, device_extension_array, surface);
 
     VkPhysicalDeviceMeshShaderFeaturesNV mesh_shader_features = {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV,
@@ -290,6 +290,15 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
 
     res->vkAllocateCommandBuffers(res->device, &command_buffer_allocate_info, &res->command_buffer);
 
+    VkCommandPoolCreateInfo task_command_pool_create_info = {
+        VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        NULL,
+        0,
+        res->queue_family_index,
+    };
+
+    res->vkCreateCommandPool(res->device, &command_pool_create_info, NULL, &res->task_command_pool);
+
     if (PyBytes_CheckExact(args.cache)) {
         VkPipelineCacheCreateInfo pipeline_cache_create_info = {
             VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
@@ -316,37 +325,163 @@ PyObject * Instance_meth_cache(Instance * self) {
     return res;
 }
 
-void execute_instance(Instance * self) {
+PyObject * Instance_meth_present(Instance * self) {
+    uint32_t surface_count = (uint32_t)PyList_Size(self->surface_list);
+
+    if (!surface_count) {
+        Py_RETURN_NONE;
+    }
+
+    VkSwapchainKHR swapchain_array[64];
+    VkPipelineStageFlags wait_stage_array[64];
+    VkImageMemoryBarrier image_barrier_array[64];
+    VkSemaphore semaphore_array[64];
+    VkResult result_array[64];
+    uint32_t index_array[64];
+
     begin_commands(self);
 
-    for (uint32_t i = 0; i < PyList_GET_SIZE(self->staging_list); ++i) {
-        StagingBuffer * staging = (StagingBuffer *)PyList_GET_ITEM(self->staging_list, i);
-        execute_staging_buffer_input(staging, self->command_buffer);
+    for (uint32_t i = 0; i < surface_count; ++i) {
+        Surface * surface = (Surface *)PyList_GET_ITEM(self->surface_list, i);
+
+        swapchain_array[i] = surface->swapchain;
+        semaphore_array[i] = surface->semaphore;
+        wait_stage_array[i] = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+        self->vkAcquireNextImageKHR(
+            self->device,
+            surface->swapchain,
+            UINT64_MAX,
+            surface->semaphore,
+            NULL,
+            &index_array[i]
+        );
     }
 
-    for (uint32_t i = 0; i < PyList_GET_SIZE(self->task_list); ++i) {
-        PyObject * task = PyList_GET_ITEM(self->task_list, i);
-        if (Py_TYPE(task) == self->state->Framebuffer_type) {
-            execute_framebuffer((Framebuffer *)task, self->command_buffer);
+    for (uint32_t i = 0; i < surface_count; ++i) {
+        Surface * surface = (Surface *)PyList_GET_ITEM(self->surface_list, i);
+
+        image_barrier_array[i] = {
+            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            NULL,
+            0,
+            0,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_QUEUE_FAMILY_IGNORED,
+            VK_QUEUE_FAMILY_IGNORED,
+            surface->images.image_array[index_array[i]],
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+        };
+    }
+
+    self->vkCmdPipelineBarrier(
+        self->command_buffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0,
+        NULL,
+        0,
+        NULL,
+        surface_count,
+        image_barrier_array
+    );
+
+    for (uint32_t i = 0; i < surface_count; ++i) {
+        Surface * surface = (Surface *)PyList_GET_ITEM(self->surface_list, i);
+
+        VkImageBlit image_blit = {
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            {{0, 0, 0}, {(int)surface->image->extent.width, (int)surface->image->extent.height, 1}},
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            {{0, 0, 0}, {(int)surface->image->extent.width, (int)surface->image->extent.height, 1}},
+        };
+
+        self->vkCmdBlitImage(
+            self->command_buffer,
+            surface->image->image,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            surface->images.image_array[index_array[i]],
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &image_blit,
+            VK_FILTER_NEAREST
+        );
+    }
+
+    for (uint32_t i = 0; i < surface_count; ++i) {
+        Surface * surface = (Surface *)PyList_GET_ITEM(self->surface_list, i);
+
+        image_barrier_array[i] = {
+            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            NULL,
+            0,
+            0,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_QUEUE_FAMILY_IGNORED,
+            VK_QUEUE_FAMILY_IGNORED,
+            surface->images.image_array[index_array[i]],
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+        };
+    }
+
+    self->vkCmdPipelineBarrier(
+        self->command_buffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        0,
+        NULL,
+        0,
+        NULL,
+        surface_count,
+        image_barrier_array
+    );
+
+    self->vkEndCommandBuffer(self->command_buffer);
+
+    VkSubmitInfo submit_info = {
+        VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        NULL,
+        surface_count,
+        semaphore_array,
+        wait_stage_array,
+        1,
+        &self->command_buffer,
+        0,
+        NULL,
+    };
+
+    self->vkQueueSubmit(self->queue, 1, &submit_info, self->fence);
+    self->vkWaitForFences(self->device, 1, &self->fence, true, UINT64_MAX);
+    self->vkResetFences(self->device, 1, &self->fence);
+
+    VkPresentInfoKHR present_info = {
+        VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        NULL,
+        0,
+        NULL,
+        surface_count,
+        swapchain_array,
+        index_array,
+        result_array,
+    };
+
+    self->vkQueuePresentKHR(self->queue, &present_info);
+
+    uint32_t idx = 0;
+    while (idx < surface_count) {
+        if (result_array[idx] == VK_ERROR_OUT_OF_DATE_KHR) {
+            Surface * surface = (Surface *)PyList_GET_ITEM(self->surface_list, idx);
+            self->vkDestroySemaphore(self->device, surface->semaphore, NULL);
+            self->vkDestroySwapchainKHR(self->device, surface->swapchain, NULL);
+            self->vkDestroySurfaceKHR(self->instance, surface->surface, NULL);
+            continue;
         }
-        if (Py_TYPE(task) == self->state->ComputePipeline_type) {
-            execute_compute_pipeline((ComputePipeline *)task, self->command_buffer);
-        }
+        idx += 1;
     }
 
-    for (uint32_t i = 0; i < PyList_GET_SIZE(self->staging_list); ++i) {
-        StagingBuffer * staging = (StagingBuffer *)PyList_GET_ITEM(self->staging_list, i);
-        execute_staging_buffer_output(staging, self->command_buffer);
-    }
-
-    if (self->presenter.surface_count) {
-        end_commands_with_present(self);
-    } else {
-        end_commands(self);
-    }
-}
-
-PyObject * Instance_meth_run(Instance * self) {
-    execute_instance(self);
     Py_RETURN_NONE;
 }

@@ -4,8 +4,9 @@ from objloader import Obj
 from PIL import Image
 
 instance = glnext.instance()
+task = instance.task()
 
-framebuffer = instance.framebuffer((512, 512))
+framebuffer = task.framebuffer((512, 512))
 
 uniform_buffer = instance.buffer('uniform_buffer', 64)
 
@@ -64,6 +65,6 @@ pipeline.update(
     vertex_buffer=Obj.open('examples/cube.obj').pack('vx vy vz nx ny nz'),
 )
 
-instance.run()
+task.run()
 data = framebuffer.output[0].read()
 Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()

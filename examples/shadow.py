@@ -4,6 +4,7 @@ from objloader import Obj
 from PIL import Image
 
 instance = glnext.instance()
+task = instance.task()
 
 vertex_size = 24
 mesh = Obj.open('examples/monkey.obj').pack('vx vy vz nx ny nz')
@@ -14,7 +15,7 @@ uniform_buffer = instance.buffer('uniform_buffer', 160)
 vertex_buffer = instance.buffer('vertex_buffer', len(mesh))
 vertex_buffer.write(mesh)
 
-shadow_fbo = instance.framebuffer((512, 512), '1f', samples=1, mode='texture')
+shadow_fbo = task.framebuffer((512, 512), '1f', samples=1, mode='texture')
 
 shadow_fbo.update(
     clear_values=glnext.pack([1.0, 0.0, 0.0, 0.0]),
@@ -64,7 +65,7 @@ shadow_pipeline = shadow_fbo.render(
     ],
 )
 
-framebuffer = instance.framebuffer((512, 512))
+framebuffer = task.framebuffer((512, 512))
 
 framebuffer.update(
     clear_values=glnext.pack([0.0, 0.0, 0.0, 1.0]),
@@ -153,6 +154,6 @@ uniform_buffer.write(b''.join([
     glnext.pack([4.0, 3.0, 12.0, 0.0]),
 ]))
 
-instance.run()
+task.run()
 data = framebuffer.output[0].read()
 Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()

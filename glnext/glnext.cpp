@@ -1,19 +1,19 @@
 #include "glnext.hpp"
 
-#include "batch.cpp"
 #include "binding.cpp"
 #include "buffer.cpp"
 #include "compute_pipeline.cpp"
 #include "debug.cpp"
 #include "extension.cpp"
 #include "framebuffer.cpp"
+#include "group.cpp"
 #include "image.cpp"
 #include "info.cpp"
 #include "instance.cpp"
 #include "loader.cpp"
 #include "render_pipeline.cpp"
-#include "staging_buffer.cpp"
 #include "surface.cpp"
+#include "task.cpp"
 #include "tools.cpp"
 #include "utils.cpp"
 
@@ -27,20 +27,20 @@ PyMethodDef module_methods[] = {
 };
 
 PyMethodDef Instance_methods[] = {
-    {"batch", (PyCFunction)Instance_meth_batch, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"framebuffer", (PyCFunction)Instance_meth_framebuffer, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"compute", (PyCFunction)Instance_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
     {"buffer", (PyCFunction)Instance_meth_buffer, METH_VARARGS | METH_KEYWORDS, NULL},
     {"image", (PyCFunction)Instance_meth_image, METH_VARARGS | METH_KEYWORDS, NULL},
-    {"staging", (PyCFunction)Instance_meth_staging, METH_VARARGS | METH_KEYWORDS, NULL},
     {"surface", (PyCFunction)Instance_meth_surface, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"task", (PyCFunction)Instance_meth_task, METH_NOARGS, NULL},
     {"cache", (PyCFunction)Instance_meth_cache, METH_NOARGS, NULL},
-    {"run", (PyCFunction)Instance_meth_run, METH_NOARGS, NULL},
+    {"present", (PyCFunction)Instance_meth_present, METH_NOARGS, NULL},
+    {"group", (PyCFunction)Instance_meth_group, METH_VARARGS | METH_KEYWORDS, NULL},
     {},
 };
 
-PyMethodDef Batch_methods[] = {
-    {"run", (PyCFunction)Batch_meth_run, METH_NOARGS, NULL},
+PyMethodDef Task_methods[] = {
+    {"framebuffer", (PyCFunction)Task_meth_framebuffer, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"compute", (PyCFunction)Task_meth_compute, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"run", (PyCFunction)Task_meth_run, METH_NOARGS, NULL},
     {},
 };
 
@@ -73,9 +73,14 @@ PyMethodDef Image_methods[] = {
     {},
 };
 
-PyMethodDef StagingBuffer_methods[] = {
-    {"read", (PyCFunction)StagingBuffer_meth_read, METH_NOARGS, NULL},
-    {"write", (PyCFunction)StagingBuffer_meth_write, METH_O, NULL},
+PyMethodDef Group_methods[] = {
+    {"__enter__", (PyCFunction)Group_meth_enter, METH_NOARGS, NULL},
+    {"__exit__", (PyCFunction)Group_meth_exit, METH_VARARGS | METH_KEYWORDS, NULL},
+    {},
+};
+
+PyGetSetDef Surface_getset[] = {
+    {"image", (getter)Surface_get_image, (setter)Surface_set_image, NULL, NULL},
     {},
 };
 
@@ -94,9 +99,8 @@ PyMemberDef RenderPipeline_members[] = {
     {},
 };
 
-PyMemberDef StagingBuffer_members[] = {
-    {"mem", T_OBJECT_EX, offsetof(StagingBuffer, mem), READONLY, NULL},
-    {"ptr", T_ULONGLONG, offsetof(StagingBuffer, ptr), READONLY, NULL},
+PyMemberDef Group_members[] = {
+    {"output", T_OBJECT_EX, offsetof(Group, output), READONLY, NULL},
     {},
 };
 
@@ -111,8 +115,14 @@ PyType_Slot Instance_slots[] = {
     {},
 };
 
-PyType_Slot Batch_slots[] = {
-    {Py_tp_methods, Batch_methods},
+PyType_Slot Surface_slots[] = {
+    {Py_tp_getset, Surface_getset},
+    {Py_tp_dealloc, default_dealloc},
+    {},
+};
+
+PyType_Slot Task_slots[] = {
+    {Py_tp_methods, Task_methods},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
@@ -156,35 +166,37 @@ PyType_Slot Image_slots[] = {
     {},
 };
 
-PyType_Slot StagingBuffer_slots[] = {
-    {Py_tp_methods, StagingBuffer_methods},
-    {Py_tp_members, StagingBuffer_members},
+PyType_Slot Group_slots[] = {
+    {Py_tp_methods, Group_methods},
+    {Py_tp_members, Group_members},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
 
 PyType_Spec Instance_spec = {"glnext.Instance", sizeof(Instance), 0, Py_TPFLAGS_DEFAULT, Instance_slots};
-PyType_Spec Batch_spec = {"glnext.Batch", sizeof(Batch), 0, Py_TPFLAGS_DEFAULT, Batch_slots};
+PyType_Spec Surface_spec = {"glnext.Surface", sizeof(Surface), 0, Py_TPFLAGS_DEFAULT, Surface_slots};
+PyType_Spec Task_spec = {"glnext.Task", sizeof(Task), 0, Py_TPFLAGS_DEFAULT, Task_slots};
 PyType_Spec Framebuffer_spec = {"glnext.Framebuffer", sizeof(Framebuffer), 0, Py_TPFLAGS_DEFAULT, Framebuffer_slots};
 PyType_Spec RenderPipeline_spec = {"glnext.RenderPipeline", sizeof(RenderPipeline), 0, Py_TPFLAGS_DEFAULT, RenderPipeline_slots};
 PyType_Spec ComputePipeline_spec = {"glnext.ComputePipeline", sizeof(ComputePipeline), 0, Py_TPFLAGS_DEFAULT, ComputePipeline_slots};
 PyType_Spec Memory_spec = {"glnext.Memory", sizeof(Memory), 0, Py_TPFLAGS_DEFAULT, Memory_slots};
 PyType_Spec Buffer_spec = {"glnext.Buffer", sizeof(Buffer), 0, Py_TPFLAGS_DEFAULT, Buffer_slots};
 PyType_Spec Image_spec = {"glnext.Image", sizeof(Image), 0, Py_TPFLAGS_DEFAULT, Image_slots};
-PyType_Spec StagingBuffer_spec = {"glnext.StagingBuffer", sizeof(StagingBuffer), 0, Py_TPFLAGS_DEFAULT, StagingBuffer_slots};
+PyType_Spec Group_spec = {"glnext.Group", sizeof(Group), 0, Py_TPFLAGS_DEFAULT, Group_slots};
 
 int module_exec(PyObject * self) {
     ModuleState * state = (ModuleState *)PyModule_GetState(self);
 
     state->Instance_type = (PyTypeObject *)PyType_FromSpec(&Instance_spec);
-    state->Batch_type = (PyTypeObject *)PyType_FromSpec(&Batch_spec);
+    state->Surface_type = (PyTypeObject *)PyType_FromSpec(&Surface_spec);
+    state->Task_type = (PyTypeObject *)PyType_FromSpec(&Task_spec);
     state->Framebuffer_type = (PyTypeObject *)PyType_FromSpec(&Framebuffer_spec);
     state->RenderPipeline_type = (PyTypeObject *)PyType_FromSpec(&RenderPipeline_spec);
     state->ComputePipeline_type = (PyTypeObject *)PyType_FromSpec(&ComputePipeline_spec);
     state->Memory_type = (PyTypeObject *)PyType_FromSpec(&Memory_spec);
-    state->StagingBuffer_type = (PyTypeObject *)PyType_FromSpec(&StagingBuffer_spec);
     state->Buffer_type = (PyTypeObject *)PyType_FromSpec(&Buffer_spec);
     state->Image_type = (PyTypeObject *)PyType_FromSpec(&Image_spec);
+    state->Group_type = (PyTypeObject *)PyType_FromSpec(&Group_spec);
 
     state->empty_str = PyUnicode_FromString("");
     state->empty_list = PyList_New(0);

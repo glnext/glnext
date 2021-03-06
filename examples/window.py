@@ -1,8 +1,8 @@
 import glnext
+import glwindow
 from glnext_compiler import glsl
-from PIL import Image
 
-instance = glnext.instance()
+instance = glnext.instance(surface=True)
 task = instance.task()
 
 framebuffer = task.framebuffer((512, 512))
@@ -29,6 +29,7 @@ pipeline = framebuffer.render(
         void main() {
             gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
             out_color = colors[gl_VertexIndex];
+            gl_Position.y *= -1.0;
         }
     '''),
     fragment_shader=glsl('''
@@ -45,6 +46,12 @@ pipeline = framebuffer.render(
     vertex_count=3,
 )
 
-task.run()
-data = framebuffer.output[0].read()
-Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()
+wnd = glwindow.window((512, 512))
+wnd.show(True)
+
+instance.surface(wnd.handle, framebuffer.output[0])
+
+while wnd.visible:
+    glwindow.update()
+    task.run()
+    instance.present()

@@ -46,8 +46,9 @@ def fill(count):
 
 
 instance = glnext.instance(surface=True)
+task = instance.task()
 
-framebuffer = instance.framebuffer((512, 512), '4p 4p 4p 4p 4p')
+framebuffer = task.framebuffer((512, 512), '4p 4p 4p 4p 4p')
 
 vertex_data, index_data = pebble(10)
 instance_data = fill(100)
@@ -139,7 +140,7 @@ def image(output):
     return Image.frombuffer('RGBX', (512, 512), data, 'raw', 'RGBX', 0, -1).convert('RGB')
 
 
-instance.run()
+task.run()
 image(0).show()
 
 image(1).save('examples/res/pebble_diffuse.png')

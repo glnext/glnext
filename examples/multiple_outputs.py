@@ -3,8 +3,9 @@ from glnext_compiler import glsl
 from PIL import Image
 
 instance = glnext.instance()
+task = instance.task()
 
-framebuffer = instance.framebuffer((512, 512), '4p 4p', samples=4)
+framebuffer = task.framebuffer((512, 512), '4p 4p', samples=4)
 
 pipeline = framebuffer.render(
     vertex_shader=glsl('''
@@ -36,7 +37,7 @@ pipeline = framebuffer.render(
     vertex_count=3,
 )
 
-instance.run()
+task.run()
 data1 = framebuffer.output[0].read()
 data2 = framebuffer.output[1].read()
 

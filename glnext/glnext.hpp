@@ -47,11 +47,23 @@ enum BufferMode {
     BUF_OUTPUT,
 };
 
+enum TransferMode {
+    COPY_BUFFER_BUFFER,
+    COPY_IMAGE_IMAGE,
+    COPY_BUFFER_IMAGE,
+    COPY_IMAGE_BUFFER,
+};
+
+struct SurfaceCompatibleFormat {
+    VkFormat src;
+    VkFormat dst;
+};
+
 struct Image;
 struct Buffer;
 struct RenderPipeline;
 struct ComputePipeline;
-struct StagingBuffer;
+struct Group;
 
 struct RenderParameters {
     VkBool32 enabled;
@@ -88,50 +100,22 @@ struct HostBuffer {
     void * ptr;
 };
 
-struct StagingBufferBinding {
-    union {
-        PyObject * obj;
-        Buffer * buffer;
-        Image * image;
-        RenderPipeline * render_pipeline;
-        ComputePipeline * compute_pipeline;
-    };
-    VkDeviceSize offset;
-    VkBool32 is_input;
-    VkBool32 is_output;
-};
-
 struct SwapChainImages {
     uint32_t image_count;
     VkImage image_array[8];
 };
 
-struct Presenter {
-    VkBool32 supported;
-    uint32_t surface_count;
-    VkSurfaceKHR surface_array[64];
-    VkSwapchainKHR swapchain_array[64];
-    VkPipelineStageFlags wait_stage_array[64];
-    VkImageMemoryBarrier copy_image_barrier_array[64];
-    VkImageMemoryBarrier present_image_barrier_array[64];
-    VkSemaphore semaphore_array[64];
-    VkImage image_source_array[64];
-    VkImageBlit image_blit_array[64];
-    SwapChainImages image_array[64];
-    VkResult result_array[64];
-    uint32_t index_array[64];
-};
-
 struct ModuleState {
     PyTypeObject * Instance_type;
-    PyTypeObject * Batch_type;
+    PyTypeObject * Surface_type;
+    PyTypeObject * Task_type;
     PyTypeObject * Framebuffer_type;
     PyTypeObject * RenderPipeline_type;
     PyTypeObject * ComputePipeline_type;
     PyTypeObject * Memory_type;
     PyTypeObject * Buffer_type;
     PyTypeObject * Image_type;
-    PyTypeObject * StagingBuffer_type;
+    PyTypeObject * Group_type;
 
     PyObject * empty_str;
     PyObject * empty_list;
@@ -167,6 +151,7 @@ struct Instance {
 
     VkCommandPool command_pool;
     VkCommandBuffer command_buffer;
+    VkCommandPool task_command_pool;
 
     VkPipelineCache pipeline_cache;
     VkDebugUtilsMessengerEXT debug_messenger;
@@ -179,10 +164,10 @@ struct Instance {
     VkFormat depth_format;
 
     Extension extension;
-    Presenter presenter;
+    Group * group;
 
+    PyObject * surface_list;
     PyObject * task_list;
-    PyObject * staging_list;
     PyObject * memory_list;
     PyObject * buffer_list;
     PyObject * image_list;
@@ -241,6 +226,7 @@ struct Instance {
     PFN_vkCreateGraphicsPipelines vkCreateGraphicsPipelines;
     PFN_vkCreateDescriptorSetLayout vkCreateDescriptorSetLayout;
     PFN_vkCmdEndRenderPass vkCmdEndRenderPass;
+    PFN_vkCmdExecuteCommands vkCmdExecuteCommands;
     PFN_vkCmdPipelineBarrier vkCmdPipelineBarrier;
     PFN_vkCreateDescriptorPool vkCreateDescriptorPool;
     PFN_vkCreateImage vkCreateImage;
@@ -286,13 +272,23 @@ struct Instance {
     PFN_vkDestroySurfaceKHR vkDestroySurfaceKHR;
 };
 
-struct Batch {
+struct Surface {
     PyObject_HEAD
     Instance * instance;
-    VkCommandPool command_pool;
-    VkCommandBuffer command_buffer;
+    PyObject * window;
+    Image * image;
+    VkSurfaceKHR surface;
+    VkSwapchainKHR swapchain;
     VkSemaphore semaphore;
-    VkBool32 present;
+    SwapChainImages images;
+};
+
+struct Task {
+    PyObject_HEAD
+    Instance * instance;
+    PyObject * task_list;
+    VkCommandBuffer command_buffer;
+    VkBool32 finished;
 };
 
 struct DescriptorBinding {
@@ -397,6 +393,19 @@ struct ComputePipeline {
     PyObject * members;
 };
 
+struct Transfer {
+    PyObject_HEAD
+    Instance * instance;
+    PyObject * src;
+    PyObject * dst;
+    TransferMode mode;
+    union {
+        VkImageCopy image_copy;
+        VkBufferCopy buffer_copy;
+        VkBufferImageCopy buffer_image_copy;
+    };
+};
+
 struct Memory {
     PyObject_HEAD
     Instance * instance;
@@ -435,16 +444,13 @@ struct Image {
     VkBool32 bound;
 };
 
-struct StagingBuffer {
+struct Group {
     PyObject_HEAD
     Instance * instance;
-    VkDeviceSize size;
-    VkBuffer buffer;
-    VkDeviceMemory memory;
-    char * ptr;
-    uint32_t binding_count;
-    StagingBufferBinding * binding_array;
-    PyObject * mem;
+    PyObject * output;
+    VkBool32 present;
+    HostBuffer temp;
+    VkDeviceSize offset;
 };
 
 struct BufferCreateInfo {
@@ -502,7 +508,7 @@ PyObject * get_device_extensions(VkPhysicalDevice physical_device, PFN_vkEnumera
 
 uint32_t load_instance_layers(Instance * instance, const char ** array, PyObject * extra_layers);
 uint32_t load_instance_extensions(Instance * instance, const char ** array, const char * surface);
-uint32_t load_device_extensions(Instance * instance, const char ** array);
+uint32_t load_device_extensions(Instance * instance, const char ** array, const char * surface);
 
 void install_debug_messenger(Instance * instance);
 
@@ -510,16 +516,12 @@ int parse_descriptor_binding(Instance * instance, DescriptorBinding * binding, P
 void create_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding, Memory * memory);
 void bind_descriptor_binding_objects(Instance * instance, DescriptorBinding * binding);
 
-void execute_instance(Instance * self);
 void execute_framebuffer(Framebuffer * self, VkCommandBuffer command_buffer);
 void execute_render_pipeline(RenderPipeline * self, VkCommandBuffer command_buffer);
 void execute_compute_pipeline(ComputePipeline * self, VkCommandBuffer command_buffer);
-void execute_staging_buffer_input(StagingBuffer * self, VkCommandBuffer command_buffer);
-void execute_staging_buffer_output(StagingBuffer * self, VkCommandBuffer command_buffer);
 
-VkCommandBuffer begin_commands(Instance * instance);
+void begin_commands(Instance * instance);
 void end_commands(Instance * instance);
-void end_commands_with_present(Instance * instance);
 
 Memory * new_memory(Instance * instance, VkBool32 host = false);
 Memory * get_memory(Instance * instance, PyObject * memory);
@@ -538,13 +540,8 @@ void bind_buffer(Buffer * buffer);
 void new_temp_buffer(Instance * instance, HostBuffer * temp, VkDeviceSize size);
 void free_temp_buffer(Instance * instance, HostBuffer * temp);
 
-void copy_present_images(Instance * self);
-void present_images(Instance * self);
-
 void build_mipmaps(BuildMipmapsInfo args);
 
 VkPrimitiveTopology get_topology(PyObject * name);
 ImageMode get_image_mode(PyObject * name);
 Format get_format(PyObject * name);
-
-void presenter_remove(Presenter * presenter, uint32_t index);
