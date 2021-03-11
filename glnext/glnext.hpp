@@ -151,7 +151,6 @@ struct Instance {
 
     VkCommandPool command_pool;
     VkCommandBuffer command_buffer;
-    VkCommandPool task_command_pool;
 
     VkPipelineCache pipeline_cache;
     VkDebugUtilsMessengerEXT debug_messenger;
@@ -287,8 +286,6 @@ struct Task {
     PyObject_HEAD
     Instance * instance;
     PyObject * task_list;
-    VkCommandBuffer command_buffer;
-    VkBool32 finished;
 };
 
 struct DescriptorBinding {
@@ -448,7 +445,6 @@ struct Group {
     PyObject_HEAD
     Instance * instance;
     PyObject * output;
-    VkBool32 present;
     HostBuffer temp;
     VkDeviceSize offset;
 };

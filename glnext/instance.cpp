@@ -88,7 +88,6 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     res->fence = NULL;
     res->command_pool = NULL;
     res->command_buffer = NULL;
-    res->task_command_pool = NULL;
     res->pipeline_cache = NULL;
     res->debug_messenger = NULL;
 
@@ -289,15 +288,6 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
     };
 
     res->vkAllocateCommandBuffers(res->device, &command_buffer_allocate_info, &res->command_buffer);
-
-    VkCommandPoolCreateInfo task_command_pool_create_info = {
-        VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        NULL,
-        0,
-        res->queue_family_index,
-    };
-
-    res->vkCreateCommandPool(res->device, &command_pool_create_info, NULL, &res->task_command_pool);
 
     if (PyBytes_CheckExact(args.cache)) {
         VkPipelineCacheCreateInfo pipeline_cache_create_info = {

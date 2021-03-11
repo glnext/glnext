@@ -1,28 +1,22 @@
 #include "glnext.hpp"
 
 Group * Instance_meth_group(Instance * self, PyObject * vargs, PyObject * kwargs) {
-    static char * keywords[] = {"buffer", "present", NULL};
+    static char * keywords[] = {"buffer", NULL};
 
-    struct {
-        VkDeviceSize buffer = 0;
-        VkBool32 present = false;
-    } args;
+    VkDeviceSize buffer = 0;
 
-    int args_ok = PyArg_ParseTupleAndKeywords(vargs, kwargs, "|$Kp", keywords, &args.buffer, &args.present);
-
-    if (!args_ok) {
+    if (!PyArg_ParseTupleAndKeywords(vargs, kwargs, "$K", keywords, &buffer)) {
         return NULL;
     }
 
     Group * res = PyObject_New(Group, self->state->Group_type);
 
     res->instance = self;
-    res->present = args.present;
     res->output = PyList_New(0);
     res->offset = 0;
 
     res->temp = {};
-    new_temp_buffer(self, &res->temp, args.buffer);
+    new_temp_buffer(self, &res->temp, buffer);
     return res;
 }
 
