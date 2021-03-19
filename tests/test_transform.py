@@ -4,7 +4,8 @@ import numpy as np
 
 
 def test_transform_input_output(instance):
-    transfrom = instance.compute(
+    task = instance.task()
+    transfrom = task.compute(
         compute_count=8,
         compute_shader=glsl('''
             #version 450
@@ -40,6 +41,6 @@ def test_transform_input_output(instance):
 
     data = np.array([1, 2, 3, 4, 5, 6, 7, 8], 'u4')
     transfrom['input_buffer'].write(data)
-    instance.run()
+    task.run()
     array = np.frombuffer(transfrom['output_buffer'].read(), 'u4')
     np.testing.assert_array_almost_equal(array, data + 1)
