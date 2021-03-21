@@ -16,7 +16,6 @@ __pycache__
 *.pyd
 *.pbd
 *.lib
-*.txt
 *.dll
 *.so
 
