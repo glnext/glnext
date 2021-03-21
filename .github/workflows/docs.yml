@@ -1,0 +1,12 @@
+name: docs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: docs
+        run: curl -X POST -d token=${{ secrets.RTD_API_TOKEN }} https://readthedocs.org/api/v2/webhook/glnext/147919/
