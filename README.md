@@ -1,6 +1,16 @@
 # glnext
 
-## Example
+High-Performance offscreen rendering for python.
+
+```sh
+pip install glnext
+```
+
+- [Documentation](https://glnext.readthedocs.io/)
+- [glnext on Github](https://github.com/glnext/glnext/)
+- [glnext on PyPI](https://pypi.org/project/glnext/)
+
+## Examples
 
 ```py
 import glnext
@@ -8,8 +18,9 @@ from glnext_compiler import glsl
 from PIL import Image
 
 instance = glnext.instance()
+task = instance.task()
 
-framebuffer = instance.framebuffer((512, 512))
+framebuffer = task.framebuffer((512, 512))
 
 pipeline = framebuffer.render(
     vertex_shader=glsl('''
@@ -41,21 +52,18 @@ pipeline = framebuffer.render(
     vertex_count=3,
 )
 
-pipeline['vertex_buffer'].write(glnext.pack([
-    -0.5, -0.5, 0.0, 0.0, 1.0,
-    0.5, -0.5, 0.0, 1.0, 0.0,
-    0.0, 0.5, 1.0, 0.0, 0.0,
-]))
+pipeline.update(
+    vertex_buffer=glnext.pack([
+        -0.5, -0.5, 0.0, 0.0, 1.0,
+        0.5, -0.5, 0.0, 1.0, 0.0,
+        0.0, 0.5, 1.0, 0.0, 0.0,
+    ])
+)
 
-instance.run()
+task.run()
 data = framebuffer.output[0].read()
-Image.frombuffer('RGBA', (512, 512), data, 'raw', 'RGBA', 0, -1).show()
-```
-
-## Install
-
-```
-pip install glnext
+img = Image.frombuffer('RGBA', (512, 512), data)
+img.save('hello_world.png')
 ```
 
 ### Windows
@@ -73,5 +81,5 @@ apt-get install libx11-dev
 
 ## Without GPU
 
-This project is compatible with [swiftshader](https://github.com/google/swiftshader).
-The [CI](https://github.com/cprogrammer1994/glnext/actions/) also runs on pure CPU. [(Dockerfile)](Dockerfile)
+This project is compatible with [swiftshader](https://github.com/google/swiftshader/).
+The [CI](https://github.com/cprogrammer1994/glnext/actions/) also runs on pure CPU. ([Dockerfile](tests/Dockerfile))
