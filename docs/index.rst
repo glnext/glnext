@@ -62,6 +62,33 @@ Objects
 | Represents a Vulkan memory allocation.
 | This class is for advanced use only.
 
+Diagrams
+========
+
+Object Hierarchy
+----------------
+
+.. image:: images/diagram_5.png
+
+.. image:: images/diagram_4.png
+
+Task Execution
+--------------
+
+.. image:: images/diagram_6.png
+
+Framebuffer execution
+---------------------
+
+.. image:: images/diagram_1.png
+
+Framebuffer Memory
+------------------
+
+.. image:: images/diagram_2.png
+
+.. image:: images/diagram_3.png
+
 Documentation
 =============
 
