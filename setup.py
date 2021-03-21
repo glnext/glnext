@@ -67,7 +67,7 @@ setup(
     ext_modules=[glnext],
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/cprogrammer1994/glnext',
+    url='https://github.com/glnext/glnext/',
     author='Szabolcs Dombi',
     author_email='cprogrammer1994@gmail.com',
     license='MIT',
