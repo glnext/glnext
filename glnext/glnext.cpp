@@ -94,11 +94,6 @@ PyMemberDef Framebuffer_members[] = {
     {},
 };
 
-PyMemberDef RenderPipeline_members[] = {
-    {"vertex_buffer", T_OBJECT_EX, offsetof(RenderPipeline, vertex_buffer), READONLY, NULL},
-    {},
-};
-
 PyMemberDef Group_members[] = {
     {"output", T_OBJECT_EX, offsetof(Group, output), READONLY, NULL},
     {},
@@ -136,7 +131,6 @@ PyType_Slot Framebuffer_slots[] = {
 
 PyType_Slot RenderPipeline_slots[] = {
     {Py_tp_methods, RenderPipeline_methods},
-    {Py_tp_members, RenderPipeline_members},
     {Py_mp_subscript, RenderPipeline_subscript},
     {Py_tp_dealloc, default_dealloc},
     {},
