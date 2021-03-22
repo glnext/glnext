@@ -84,6 +84,21 @@ PyGetSetDef Surface_getset[] = {
     {},
 };
 
+PyGetSetDef Framebuffer_getset[] = {
+    {"size", (getter)Framebuffer_get_size, NULL, NULL, NULL},
+    {},
+};
+
+PyGetSetDef Buffer_getset[] = {
+    {"size", (getter)Buffer_get_size, NULL, NULL, NULL},
+    {},
+};
+
+PyGetSetDef Image_getset[] = {
+    {"size", (getter)Image_get_size, NULL, NULL, NULL},
+    {},
+};
+
 PyMemberDef Instance_members[] = {
     {"log", T_OBJECT_EX, offsetof(Instance, log_list), READONLY, NULL},
     {},
@@ -125,6 +140,7 @@ PyType_Slot Task_slots[] = {
 PyType_Slot Framebuffer_slots[] = {
     {Py_tp_methods, Framebuffer_methods},
     {Py_tp_members, Framebuffer_members},
+    {Py_tp_getset, Framebuffer_getset},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
@@ -150,12 +166,14 @@ PyType_Slot Memory_slots[] = {
 
 PyType_Slot Buffer_slots[] = {
     {Py_tp_methods, Buffer_methods},
+    {Py_tp_getset, Buffer_getset},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
 
 PyType_Slot Image_slots[] = {
     {Py_tp_methods, Image_methods},
+    {Py_tp_getset, Image_getset},
     {Py_tp_dealloc, default_dealloc},
     {},
 };
@@ -191,6 +209,17 @@ int module_exec(PyObject * self) {
     state->Buffer_type = (PyTypeObject *)PyType_FromSpec(&Buffer_spec);
     state->Image_type = (PyTypeObject *)PyType_FromSpec(&Image_spec);
     state->Group_type = (PyTypeObject *)PyType_FromSpec(&Group_spec);
+
+    PyModule_AddObject(self, "Instance", (PyObject *)state->Instance_type);
+    PyModule_AddObject(self, "Surface", (PyObject *)state->Surface_type);
+    PyModule_AddObject(self, "Task", (PyObject *)state->Task_type);
+    PyModule_AddObject(self, "Framebuffer", (PyObject *)state->Framebuffer_type);
+    PyModule_AddObject(self, "RenderPipeline", (PyObject *)state->RenderPipeline_type);
+    PyModule_AddObject(self, "ComputePipeline", (PyObject *)state->ComputePipeline_type);
+    PyModule_AddObject(self, "Memory", (PyObject *)state->Memory_type);
+    PyModule_AddObject(self, "Buffer", (PyObject *)state->Buffer_type);
+    PyModule_AddObject(self, "Image", (PyObject *)state->Image_type);
+    PyModule_AddObject(self, "Group", (PyObject *)state->Group_type);
 
     state->empty_str = PyUnicode_FromString("");
     state->empty_list = PyList_New(0);

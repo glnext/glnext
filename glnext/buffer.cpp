@@ -166,3 +166,7 @@ PyObject * Buffer_meth_write(Buffer * self, PyObject * arg) {
     free_temp_buffer(self->instance, &temp);
     Py_RETURN_NONE;
 }
+
+PyObject * Buffer_get_size(Buffer * self) {
+    return Py_BuildValue("K", self->size);
+}

@@ -319,3 +319,7 @@ PyObject * Image_meth_write(Image * self, PyObject * arg) {
     free_temp_buffer(self->instance, &temp);
     Py_RETURN_NONE;
 }
+
+PyObject * Image_get_size(Image * self) {
+    return Py_BuildValue("II", self->extent.width, self->extent.height);
+}

@@ -470,3 +470,7 @@ PyObject * Framebuffer_meth_update(Framebuffer * self, PyObject * vargs, PyObjec
 
     Py_RETURN_NONE;
 }
+
+PyObject * Framebuffer_get_size(Framebuffer * self) {
+    return Py_BuildValue("II", self->width, self->height);
+}
