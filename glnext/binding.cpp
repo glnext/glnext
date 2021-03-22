@@ -530,6 +530,16 @@ int parse_descriptor_binding(Instance * instance, DescriptorBinding * binding, P
                 }
             }
 
+            if (PyObject * temp = PyDict_GetItemString(item, "array")) {
+                if (!PyBool_Check(temp)) {
+                    PyErr_Format(PyExc_ValueError, "array");
+                    return -1;
+                }
+                if (PyObject_IsTrue(temp)) {
+                    image_view_type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+                }
+            }
+
             binding->image.image_view_create_info_array[i] = {
                 VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                 NULL,
