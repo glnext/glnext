@@ -71,7 +71,13 @@ Instance * glnext_meth_instance(PyObject * self, PyObject * vargs, PyObject * kw
         surface = PyUnicode_AsUTF8(args.surface);
     }
 
-    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = get_instance_proc_addr(args.backend);
+    const char * backend = getenv("GLNEXT_BACKEND");
+
+    if (args.backend) {
+        backend = args.backend;
+    }
+
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = get_instance_proc_addr(backend);
 
     if (!vkGetInstanceProcAddr) {
         PyErr_Format(PyExc_RuntimeError, "cannot load backend");
