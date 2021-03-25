@@ -2,7 +2,7 @@ project = 'glnext'
 copyright = '2021, Dombi Szabolcs'
 author = 'Dombi Szabolcs'
 
-release = '0.7.0'
+release = '0.8.1'
 
 extensions = [
     'sphinx_rtd_theme',
