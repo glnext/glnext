@@ -11,12 +11,19 @@ PyObject * glnext_meth_info(PyObject * self, PyObject * vargs, PyObject * kwargs
         return NULL;
     }
 
-    VkInstance instance = NULL;
-    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = get_instance_proc_addr(args.backend);
+    const char * backend = getenv("GLNEXT_BACKEND");
+
+    if (args.backend) {
+        backend = args.backend;
+    }
+
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = get_instance_proc_addr(backend);
 
     if (!vkGetInstanceProcAddr) {
         return NULL;
     }
+
+    VkInstance instance = NULL;
 
     #define load(name) PFN_ ## name name = (PFN_ ## name)vkGetInstanceProcAddr(instance, #name)
 
